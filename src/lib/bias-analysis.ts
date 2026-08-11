@@ -1,7 +1,6 @@
 
 import { ai, GEMINI_MODEL, GeminiCallError, toGeminiCallError } from "./gemini-client";
 import type { BiasItem } from "@/types";
-
 export interface AnalysisResult {
   score: number;
   summary: string;
@@ -68,6 +67,10 @@ Aturan:
 - Fokus pada bias yang nyata dan signifikan, bukan nitpicking berlebihan
 - Untuk Confirmation Bias khususnya: cek apakah teks penelitian/analisis menunjukkan tanda cherry-picking data atau kesimpulan yang sudah ditentukan sebelum data dikumpulkan, meskipun teks tidak menyebut kelompok demografis apapun
 - Maksimal 8 temuan bias
+- PENTING: Paper akademik hampir selalu mengandung minimal Confirmation Bias — penulis cenderung memilih metrik yang mendukung klaim mereka. Cari pola ini dengan teliti.
+- Jika paper menggunakan metrik evaluasi yang nilainya lemah tapi diklaim sebagai bukti keberhasilan, itu HARUS dilaporkan sebagai Confirmation Bias dengan severity medium atau high.
+- Jangan return biases kosong untuk paper akademik kecuali benar-benar tidak ada indikasi apapun setelah diperiksa menyeluruh.
+- Silhouette Score di bawah 0.5 yang diklaim sebagai "moderate cohesion" atau "good clustering" adalah Confirmation Bias yang jelas.
 - Selalu kembalikan JSON valid`;
 
 // Gemini free tier: 250.000 token/menit (jauh lebih longgar dari Groq 12.000 TPM),
@@ -102,7 +105,8 @@ export async function analyzeBias(text: string): Promise<AnalysisResult> {
       config: {
         systemInstruction: SYSTEM_PROMPT,
         temperature: 0.3,
-        responseMimeType: "application/json",
+        responseMimeType: "application/json", 
+
       },
     });
   } catch (e) {
@@ -130,6 +134,7 @@ export async function analyzeBias(text: string): Promise<AnalysisResult> {
   }
 
   const raw = response.text?.trim() ?? "";
+  console.log("RAW BIAS RESPONSE:", raw.slice(0, 500));
   if (!raw) {
     console.error("Gemini (bias) mengembalikan teks kosong. finishReason:", finishReason);
     throw new GeminiCallError(502, "Gagal menganalisis teks. Coba lagi.");

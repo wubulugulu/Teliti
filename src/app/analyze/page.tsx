@@ -59,6 +59,7 @@ export default function Home() {
         formData.append("file", file);
         const res = await fetch("/api/integrity-check", { method: "POST", body: formData });
         data = await res.json();
+        console.log("documentText:", data.documentText?.slice(0, 200));
         if (!res.ok) throw new Error(data.error || "Gagal menganalisis");
         docText = data.documentText || "";
       } else {

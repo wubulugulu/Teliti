@@ -26,6 +26,7 @@ interface IntegrityCheckResponse {
   consistencyResult: ConsistencyResult | null;
   figures: FigureReference[];
   warnings: string[];
+  documentText: string;
 }
 
 function scoreLabel(s: number): string {
@@ -160,6 +161,8 @@ export async function POST(req: NextRequest) {
       consistencyResult,
       figures,
       warnings,
+      documentText: text,
+
     };
 
     return NextResponse.json(response);
