@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #F5F4F0;
+  --bg-card: #FFFFFF;
+  --bg-hover: #EFEEEA;
+  --border: #E2E0D9;
+  --border-strong: #C8C5BC;
+  --text-primary: #1A1917;
+  --text-secondary: #6B6860;
+  --text-muted: #A09D96;
+  --teal: #0D9488;
+  --teal-light: #CCFBF1;
+  --teal-dark: #0F766E;
+  --teal-bg: #F0FDFA;
+  --red: #DC2626;
+  --red-bg: #FEF2F2;
+  --amber: #D97706;
+  --amber-bg: #FFFBEB;
+  --green: #16A34A;
+  --green-bg: #F0FDF4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+}
+
+.font-jakarta {
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+/* Highlight animation */
+@keyframes highlight-pulse {
+  0% { background-color: #FEF08A; }
+  100% { background-color: #FEF9C3; }
+}
+
+.bias-highlight {
+  background-color: #FEF9C3;
+  border-bottom: 2px solid #EAB308;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.15s;
+}
+
+.bias-highlight:hover {
+  background-color: #FEF08A;
+}
+
+.bias-highlight.active {
+  background-color: #FDE047;
+  border-bottom-color: #CA8A04;
+}
+
+.consistency-highlight {
+  background-color: #FEE2E2;
+  border-bottom: 2px solid #EF4444;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.15s;
+}
+
+.consistency-highlight:hover,
+.consistency-highlight.active {
+  background-color: #FECACA;
+}
