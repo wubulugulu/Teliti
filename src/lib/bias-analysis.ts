@@ -1,6 +1,6 @@
 
 import { ai, GEMINI_MODEL, GeminiCallError, toGeminiCallError } from "./gemini-client";
-import type { BiasItem } from "@/app/page";
+import type { BiasItem } from "@/types";
 
 export interface AnalysisResult {
   score: number;

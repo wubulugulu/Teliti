@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo } from "react";
-import type { BiasItem } from "@/app/page";
+import type { BiasItem } from "@/types";
 
 type Issue = {
   title: string;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
+import type { BiasItem, AnalysisResult, ScanRecord } from "@/types";
 export default function LandingPage() {
   const router = useRouter();
 

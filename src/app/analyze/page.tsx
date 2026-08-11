@@ -1,32 +1,8 @@
 "use client";
-
+import type { BiasItem, AnalysisResult, ScanRecord } from "@/types";
 import { useState, useRef, useCallback } from "react";
 import ResultPanel from "@/components/ResultPanel";
 import DocumentViewer from "@/components/DocumentViewer";
-
-export type BiasItem = {
-  sentence: string;
-  type: string;
-  severity: "low" | "medium" | "high";
-  explanation: string;
-  suggestion: string;
-};
-
-export type AnalysisResult = {
-  score: number;
-  summary: string;
-  biases: BiasItem[];
-};
-
-export type ScanRecord = {
-  id: string;
-  fileName: string;
-  timestamp: Date;
-  integrityScore: number | null;
-  biasResult: AnalysisResult | null;
-  consistencyResult: any | null;
-  documentText: string;
-};
 
 export default function Home() {
   const [stage, setStage] = useState<"input" | "result">("input");
@@ -55,7 +31,6 @@ export default function Home() {
       } else if (f.name.endsWith(".txt")) {
         setText(await f.text());
       }
-      // PDF: dikirim langsung ke API
     } catch {
       setError("Gagal membaca file.");
       setFile(null);
@@ -76,18 +51,15 @@ export default function Home() {
     if (!file && !text.trim()) return;
     setLoading(true);
     setError("");
-
     try {
       let docText = text;
       let data: any;
-
       if (file?.name.endsWith(".pdf")) {
         const formData = new FormData();
         formData.append("file", file);
         const res = await fetch("/api/integrity-check", { method: "POST", body: formData });
         data = await res.json();
         if (!res.ok) throw new Error(data.error || "Gagal menganalisis");
-        // Tampilkan teks dari PDF jika ada — untuk highlight
         docText = data.documentText || "";
       } else {
         const res = await fetch("/api/integrity-check", {
@@ -98,7 +70,6 @@ export default function Home() {
         data = await res.json();
         if (!res.ok) throw new Error(data.error || "Gagal menganalisis");
       }
-
       const record: ScanRecord = {
         id: Date.now().toString(),
         fileName: file?.name || "Teks langsung",
@@ -108,7 +79,6 @@ export default function Home() {
         consistencyResult: data.consistencyResult ?? null,
         documentText: docText,
       };
-
       setHistory((prev) => [record, ...prev]);
       setActiveScan(record);
       setStage("result");
@@ -134,41 +104,33 @@ export default function Home() {
   // ── INPUT STAGE ──────────────────────────────────────────────────
   if (stage === "input") {
     return (
-      <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+      <div className="min-h-screen flex flex-col bg-[#f0fdfa]">
+        {/* Background blobs */}
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-teal-200/30 rounded-full blur-[100px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-blue-200/30 rounded-full blur-[100px]" />
+        </div>
+
         {/* Header */}
-        <header
-          className="flex items-center justify-between px-8 py-4 border-b"
-          style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
-        >
+        <header className="relative z-10 flex items-center justify-between px-8 py-4 bg-white/60 backdrop-blur-md border-b border-white/40">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-700 tracking-tight" style={{ color: "var(--text-primary)" }}>
-              teliti
-            </span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-500"
-              style={{ background: "var(--teal-light)", color: "var(--teal-dark)" }}
-            >
-              beta
-            </span>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
+            <span className="text-lg font-bold tracking-tight text-[#0b1c30]">Teliti</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-teal-50 text-teal-700 border border-teal-100">beta</span>
           </div>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            ITFest 6.0 · Universitas Paramadina
-          </span>
+          <span className="text-xs text-[#6d7a77]">ITFest 6.0 · Universitas Paramadina</span>
         </header>
 
         {/* Main */}
-        <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
+        <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-16">
           <div className="w-full max-w-2xl">
             {/* Hero */}
             <div className="mb-10 text-center">
-              <h1
-                className="text-4xl font-700 tracking-tight mb-3 leading-tight"
-                style={{ color: "var(--text-primary)" }}
-              >
+              <h1 className="text-4xl font-extrabold tracking-tight mb-3 leading-tight text-[#0b1c30]">
                 Dokumen lo sudah{" "}
-                <span style={{ color: "var(--teal)" }}>teliti</span>?
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-teal-400">teliti</span>?
               </h1>
-              <p className="text-base" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-base text-[#3d4947]">
                 Cek bias dan konsistensi skripsi, paper, atau teks akademik lo — sekaligus, satu scan.
               </p>
             </div>
@@ -179,101 +141,77 @@ export default function Home() {
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onClick={() => !file && fileRef.current?.click()}
-              className="rounded-2xl border-2 border-dashed transition-all mb-4"
-              style={{
-                borderColor: dragging ? "var(--teal)" : file ? "var(--teal)" : "var(--border-strong)",
-                background: dragging ? "var(--teal-bg)" : file ? "var(--teal-bg)" : "var(--bg-card)",
-                cursor: file ? "default" : "pointer",
-                padding: "28px",
-              }}
+              className={`rounded-2xl border-2 border-dashed transition-all mb-4 p-7 ${
+                dragging
+                  ? "border-teal-500 bg-teal-50"
+                  : file
+                  ? "border-teal-400 bg-teal-50/50"
+                  : "border-[#bcc9c6] bg-white/70 hover:border-teal-300 hover:bg-white/90 cursor-pointer"
+              }`}
             >
               {fileLoading ? (
                 <div className="flex flex-col items-center gap-3 py-4">
-                  <div
-                    className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: "var(--border-strong)", borderTopColor: "var(--teal)" }}
-                  />
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>Membaca file...</p>
+                  <div className="w-8 h-8 rounded-full border-2 border-teal-200 border-t-teal-600 animate-spin" />
+                  <p className="text-sm text-[#6d7a77]">Membaca file...</p>
                 </div>
               ) : file ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
-                      style={{ background: "var(--teal-light)" }}
-                    >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-teal-100">
                       {isPDF ? "📕" : "📄"}
                     </div>
                     <div>
-                      <p className="text-sm font-600" style={{ color: "var(--text-primary)" }}>{file.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        {(file.size / 1024).toFixed(1)} KB
-                      </p>
+                      <p className="text-sm font-semibold text-[#0b1c30]">{file.name}</p>
+                      <p className="text-xs mt-0.5 text-[#6d7a77]">{(file.size / 1024).toFixed(1)} KB</p>
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); setFile(null); setText(""); }}
-                    className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-                    style={{ color: "var(--red)", background: "var(--red-bg)" }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
                   >
                     Hapus
                   </button>
                 </div>
               ) : dragging ? (
                 <div className="flex flex-col items-center gap-2 py-4">
-                  <p className="text-sm font-600" style={{ color: "var(--teal)" }}>Lepas file di sini</p>
+                  <p className="text-sm font-semibold text-teal-600">Lepas file di sini</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2 py-4 text-center">
-                  <div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-1"
-                    style={{ background: "var(--bg-hover)" }}
-                  >
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-1">
                     <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
-                      <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="var(--text-secondary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="var(--text-secondary)" strokeWidth="1.8" strokeLinecap="round"/>
+                      <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round"/>
                     </svg>
                   </div>
-                  <p className="text-sm font-500" style={{ color: "var(--text-primary)" }}>
-                    Drag & drop atau <span style={{ color: "var(--teal)" }}>pilih file</span>
+                  <p className="text-sm font-medium text-[#0b1c30]">
+                    Drag & drop atau <span className="text-teal-600">pilih file</span>
                   </p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>PDF, DOCX, TXT</p>
+                  <p className="text-xs text-[#6d7a77]">PDF, DOCX, TXT · Maks. 10MB</p>
                 </div>
               )}
               <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} className="hidden" />
             </div>
 
-            {/* Divider */}
+            {/* Divider + Textarea */}
             {!isPDF && (
               <>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>atau ketik langsung</span>
-                  <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                  <div className="flex-1 h-px bg-[#bcc9c6]" />
+                  <span className="text-xs text-[#6d7a77]">atau ketik langsung</span>
+                  <div className="flex-1 h-px bg-[#bcc9c6]" />
                 </div>
-
-                <div
-                  className="rounded-2xl border overflow-hidden mb-4"
-                  style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
-                >
+                <div className="rounded-2xl border border-[#bcc9c6] bg-white/80 overflow-hidden mb-4">
                   <textarea
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder="Paste teks di sini..."
-                    className="w-full px-5 pt-5 pb-3 resize-none outline-none text-sm leading-relaxed"
-                    style={{
-                      background: "transparent",
-                      color: "var(--text-primary)",
-                      minHeight: "180px",
-                      fontFamily: "inherit",
-                    }}
+                    className="w-full px-5 pt-5 pb-3 resize-none outline-none text-sm leading-relaxed bg-transparent text-[#0b1c30] placeholder:text-[#6d7a77]"
+                    style={{ minHeight: "180px", fontFamily: "inherit" }}
                     rows={7}
                   />
-                  <div
-                    className="flex items-center justify-between px-5 py-3 border-t"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5eeff]">
+                    <span className="text-xs text-[#6d7a77]">
                       {wordCount > 0 ? `${wordCount} kata` : "Min. 5 kata"}
                     </span>
                   </div>
@@ -283,10 +221,7 @@ export default function Home() {
 
             {/* Error */}
             {error && (
-              <div
-                className="rounded-xl px-4 py-3 mb-4 text-sm"
-                style={{ background: "var(--red-bg)", color: "var(--red)" }}
-              >
+              <div className="rounded-xl px-4 py-3 mb-4 text-sm bg-red-50 text-red-600 border border-red-100">
                 {error}
               </div>
             )}
@@ -295,27 +230,21 @@ export default function Home() {
             <button
               onClick={scan}
               disabled={!canScan}
-              className="w-full py-3.5 rounded-xl text-sm font-600 transition-all flex items-center justify-center gap-2"
-              style={{
-                background: canScan ? "var(--teal)" : "var(--border)",
-                color: canScan ? "#fff" : "var(--text-muted)",
-                cursor: canScan ? "pointer" : "not-allowed",
-              }}
+              className={`w-full py-3.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                canScan
+                  ? "bg-teal-600 text-white hover:bg-teal-700 hover:shadow-[0_4px_20px_rgba(13,148,136,0.3)]"
+                  : "bg-[#e5eeff] text-[#6d7a77] cursor-not-allowed"
+              }`}
             >
               {loading ? (
                 <>
-                  <div
-                    className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-                    style={{ borderColor: "rgba(255,255,255,0.3)", borderTopColor: "#fff" }}
-                  />
+                  <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                   Menganalisis...
                 </>
-              ) : (
-                "Scan Dokumen"
-              )}
+              ) : "Scan Dokumen"}
             </button>
 
-            {/* What we check */}
+            {/* Feature grid */}
             <div className="mt-8 grid grid-cols-2 gap-2">
               {[
                 { label: "Deteksi Bias", desc: "Gender, usia, ras, konfirmasi, dll" },
@@ -323,13 +252,9 @@ export default function Home() {
                 { label: "Highlight Teks", desc: "Tandai bagian bermasalah langsung" },
                 { label: "Saran Perbaikan", desc: "Rekomendasi kalimat yang lebih baik" },
               ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-xl px-4 py-3 border"
-                  style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
-                >
-                  <p className="text-xs font-600 mb-0.5" style={{ color: "var(--text-primary)" }}>{item.label}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{item.desc}</p>
+                <div key={item.label} className="rounded-xl px-4 py-3 border border-[#e5eeff] bg-white/70">
+                  <p className="text-xs font-semibold mb-0.5 text-[#0b1c30]">{item.label}</p>
+                  <p className="text-xs text-[#6d7a77]">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -341,74 +266,86 @@ export default function Home() {
 
   // ── RESULT STAGE ──────────────────────────────────────────────────
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: "var(--bg)" }}>
+    <div className="h-screen flex flex-col overflow-hidden bg-[#f0fdfa]">
       {/* Header */}
-      <header
-        className="flex items-center justify-between px-5 py-3 border-b flex-shrink-0"
-        style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
-      >
+      <header className="flex items-center justify-between px-5 py-3 border-b border-[#e5eeff] bg-white/80 backdrop-blur-md flex-shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen((v) => !v)}
-            className="p-1.5 rounded-lg transition-colors"
-            style={{ color: "var(--text-secondary)" }}
+            className="p-1.5 rounded-lg text-[#3d4947] hover:bg-teal-50 transition-colors"
             title="Toggle sidebar"
           >
             <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
               <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
           </button>
-          <span className="text-base font-700 tracking-tight" style={{ color: "var(--text-primary)" }}>teliti</span>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
+            <span className="text-base font-bold tracking-tight text-[#0b1c30]">Teliti</span>
+          </div>
         </div>
         <button
           onClick={reset}
-          className="text-xs px-3 py-1.5 rounded-lg font-500 transition-colors"
-          style={{ background: "var(--bg-hover)", color: "var(--text-secondary)" }}
+          className="text-xs px-4 py-2 rounded-lg font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100 transition-colors"
         >
-          + Scan baru
+          + Scan Baru
         </button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar history */}
+        {/* Sidebar */}
         {sidebarOpen && (
-          <aside
-            className="w-56 flex-shrink-0 border-r flex flex-col overflow-hidden"
-            style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
-          >
-            <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
-              <p className="text-xs font-600" style={{ color: "var(--text-muted)" }}>RIWAYAT SCAN</p>
+          <aside className="w-60 flex-shrink-0 border-r border-[#e5eeff] bg-white/70 flex flex-col overflow-hidden">
+            {/* Sidebar header */}
+            <div className="px-4 py-4 border-b border-[#e5eeff]">
+              <p className="text-[10px] font-bold text-[#6d7a77] uppercase tracking-widest mb-3">Scan History</p>
+              <button
+                onClick={reset}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 transition-colors"
+              >
+                <span>+</span> New Analysis
+              </button>
             </div>
-            <div className="flex-1 overflow-y-auto py-2">
+
+            <div className="px-3 py-2">
+              <p className="text-[10px] font-semibold text-[#6d7a77] uppercase tracking-widest px-1 mb-1">Last 30 Days</p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
               {history.map((record) => (
                 <button
                   key={record.id}
                   onClick={() => { setActiveScan(record); setActiveHighlight(null); }}
-                  className="w-full text-left px-4 py-3 transition-colors"
-                  style={{
-                    background: activeScan?.id === record.id ? "var(--teal-bg)" : "transparent",
-                    borderLeft: activeScan?.id === record.id ? "2px solid var(--teal)" : "2px solid transparent",
-                  }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${
+                    activeScan?.id === record.id
+                      ? "bg-teal-50 border border-teal-200"
+                      : "hover:bg-[#f0fdfa]"
+                  }`}
                 >
-                  <p
-                    className="text-xs font-500 truncate mb-0.5"
-                    style={{ color: activeScan?.id === record.id ? "var(--teal-dark)" : "var(--text-primary)" }}
-                  >
+                  <p className={`text-xs font-medium truncate mb-0.5 ${activeScan?.id === record.id ? "text-teal-700" : "text-[#0b1c30]"}`}>
                     {record.fileName}
                   </p>
                   <div className="flex items-center gap-2">
                     {record.integrityScore !== null && (
-                      <span
-                        className="text-xs font-600"
-                        style={{ color: record.integrityScore >= 75 ? "var(--green)" : record.integrityScore >= 50 ? "var(--amber)" : "var(--red)" }}
-                      >
+                      <span className={`text-xs font-bold ${
+                        record.integrityScore >= 75 ? "text-teal-600" : record.integrityScore >= 50 ? "text-amber-500" : "text-red-500"
+                      }`}>
                         {record.integrityScore}/100
                       </span>
                     )}
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    <span className="text-xs text-[#6d7a77]">
                       {record.timestamp.toLocaleTimeString("id", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Sidebar footer */}
+            <div className="border-t border-[#e5eeff] px-4 py-3 space-y-1">
+              {["Scans", "Documents", "Drafts", "Analytics", "Archive"].map((item) => (
+                <button key={item} className="w-full text-left text-xs text-[#6d7a77] hover:text-teal-600 px-2 py-1.5 rounded-lg hover:bg-teal-50 transition-colors">
+                  {item}
                 </button>
               ))}
             </div>
@@ -416,7 +353,7 @@ export default function Home() {
         )}
 
         {/* Document viewer */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col bg-white/50">
           {activeScan && (
             <DocumentViewer
               text={activeScan.documentText}
@@ -429,10 +366,7 @@ export default function Home() {
         </div>
 
         {/* Result panel */}
-        <div
-          className="w-96 flex-shrink-0 border-l overflow-y-auto"
-          style={{ borderColor: "var(--border)", background: "var(--bg-card)" }}
-        >
+        <div className="w-96 flex-shrink-0 border-l border-[#e5eeff] overflow-y-auto bg-white/70">
           {activeScan && (
             <ResultPanel
               scan={activeScan}
