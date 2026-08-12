@@ -1,5 +1,3 @@
-
-
 import { ai, GEMINI_MODEL, GeminiCallError, toGeminiCallError } from "./gemini-client";
 import type { ConsistencyResult } from "@/components/ConsistencyResult";
 import type { InlineImage } from "./pdf-extract";
@@ -48,6 +46,13 @@ Analisis SEMUA aspek berikut tanpa terkecuali:
 ## 8. KELENGKAPAN STRUKTUR
 - Apakah semua bagian standar paper ada (abstract, pendahuluan, metode, hasil, kesimpulan)?
 - Apakah ada bagian yang tiba-tiba membahas topik di luar scope yang ditetapkan?
+
+## ATURAN PENTING UNTUK section_a DAN section_b
+Field "section_a" dan "section_b" HARUS merujuk pada bagian/bab yang BENAR-BENAR ADA di dokumen (ditandai heading eksplisit seperti "BAB I", "Bab III", atau nama section yang disebut literal di teks).
+
+JANGAN membuat nama sub-bagian fiktif seperti "Abstrak (Metodologi)" atau "Abstrak (Kesimpulan)" jika dokumen yang diberikan hanya berupa satu paragraf/abstrak tanpa struktur bab eksplisit. Jika kontradiksi ditemukan DALAM satu paragraf yang sama (tidak ada pemisahan bab), gunakan section_a dan section_b yang IDENTIK, contoh: "Abstrak (Paragraf 1)" untuk keduanya — jangan memecahnya menjadi sub-bagian buatan.
+
+Jika dokumen tidak memiliki struktur bab lengkap sama sekali, cukup laporkan SATU temuan kategori "Kelengkapan" yang menjelaskan hal ini, dan jangan memaksakan generate banyak pasangan section fiktif hanya untuk memenuhi kuota temuan.
 
 Kembalikan HANYA JSON valid tanpa markdown:
 

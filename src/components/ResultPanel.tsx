@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ScanRecord } from "@/types";
+
 type Props = {
   scan: ScanRecord;
   activeHighlight: string | null;
@@ -9,25 +10,75 @@ type Props = {
 };
 
 const sevColor = {
-  high: { text: "var(--red)", bg: "var(--red-bg)", label: "Tinggi" },
-  medium: { text: "var(--amber)", bg: "var(--amber-bg)", label: "Sedang" },
+  high: { text: "#DC2626", bg: "#FEE2E2", label: "Tinggi" },
+  medium: { text: "#D97706", bg: "#FFFBEB", label: "Sedang" },
   low: { text: "#CA8A04", bg: "#FFFBEB", label: "Rendah" },
 };
 
-function IntegrityGauge({ score }: { score: number }) {
-  const color = score >= 75 ? "var(--green)" : score >= 50 ? "var(--amber)" : "var(--red)";
-  const label = score >= 90 ? "Sempurna" : score >= 75 ? "Baik" : score >= 60 ? "Cukup" : score >= 40 ? "Kurang" : "Buruk";
+function scoreColor(score: number) {
+  if (score >= 75) return "#16A34A";
+  if (score >= 50) return "#D97706";
+  return "#DC2626";
+}
+
+function scoreLabel(score: number) {
+  if (score >= 90) return "Sempurna";
+  if (score >= 75) return "Baik";
+  if (score >= 60) return "Cukup";
+  if (score >= 40) return "Kurang";
+  if (score >= 20) return "Buruk";
+  return "Sangat Buruk";
+}
+
+function IntegrityGauge({
+  score,
+  onExport,
+  exporting,
+}: {
+  score: number;
+  onExport: () => void;
+  exporting: boolean;
+}) {
+  const color = scoreColor(score);
+  const label = scoreLabel(score);
 
   return (
-    <div className="px-5 py-5 border-b" style={{ borderColor: "var(--border)" }}>
-      <p className="text-xs font-600 mb-3" style={{ color: "var(--text-muted)" }}>INTEGRITY SCORE</p>
-      <div className="flex items-end gap-3 mb-3">
-        <span className="text-5xl font-700 tabular-nums leading-none" style={{ color }}>{score}</span>
-        <span className="text-lg mb-1" style={{ color: "var(--text-muted)" }}>/100</span>
-        <span className="text-sm font-600 mb-1" style={{ color }}>{label}</span>
+    <div className="px-5 py-5 border-b border-[#e5eeff]">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-bold text-[#6d7a77] uppercase tracking-widest">
+          Integrity Score
+        </p>
+        <button
+          onClick={onExport}
+          disabled={exporting}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors disabled:opacity-50"
+        >
+          {exporting ? (
+            <div className="w-3 h-3 rounded-full border-2 border-teal-300 border-t-teal-600 animate-spin" />
+          ) : (
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24">
+              <path
+                d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+          {exporting ? "Membuat..." : "Export PDF"}
+        </button>
       </div>
-      {/* Bar */}
-      <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+      <div className="flex items-end gap-2 mb-3">
+        <span className="text-5xl font-bold tabular-nums leading-none" style={{ color }}>
+          {score}
+        </span>
+        <span className="text-lg mb-1 text-[#6d7a77]">/100</span>
+        <span className="text-sm font-bold mb-1" style={{ color }}>
+          {label}
+        </span>
+      </div>
+      <div className="w-full h-1.5 rounded-full overflow-hidden bg-[#e5eeff]">
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{ width: `${score}%`, background: color }}
@@ -39,37 +90,62 @@ function IntegrityGauge({ score }: { score: number }) {
 
 export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }: Props) {
   const [tab, setTab] = useState<"bias" | "consistency">("bias");
+  const [exporting, setExporting] = useState(false);
   const { biasResult, consistencyResult, integrityScore } = scan;
 
   const biases = biasResult?.biases ?? [];
   const issues = consistencyResult?.issues ?? [];
   const sections = consistencyResult?.sections ?? [];
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { exportToPDF } = await import("@/lib/exportPDF");
+      await exportToPDF(scan);
+    } catch (e) {
+      console.error("Export gagal:", e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Integrity score */}
-      {integrityScore !== null && <IntegrityGauge score={integrityScore} />}
+      {/* Integrity Score + Export */}
+      {integrityScore !== null && (
+        <IntegrityGauge score={integrityScore} onExport={handleExport} exporting={exporting} />
+      )}
 
       {/* Tabs */}
-      <div className="flex border-b flex-shrink-0" style={{ borderColor: "var(--border)" }}>
+      <div className="flex border-b border-[#e5eeff] flex-shrink-0">
         <button
           onClick={() => setTab("bias")}
-          className="flex-1 py-3 text-xs font-600 transition-colors relative"
-          style={{ color: tab === "bias" ? "var(--teal)" : "var(--text-muted)" }}
+          className="flex-1 py-3 text-xs font-semibold transition-colors relative"
+          style={{ color: tab === "bias" ? "#0d9488" : "#6d7a77" }}
         >
-          Bias {biases.length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs" style={{ background: "var(--teal-light)", color: "var(--teal-dark)" }}>{biases.length}</span>}
+          Bias{" "}
+          {biases.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-teal-50 text-teal-700">
+              {biases.length}
+            </span>
+          )}
           {tab === "bias" && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: "var(--teal)" }} />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
           )}
         </button>
         <button
           onClick={() => setTab("consistency")}
-          className="flex-1 py-3 text-xs font-600 transition-colors relative"
-          style={{ color: tab === "consistency" ? "var(--teal)" : "var(--text-muted)" }}
+          className="flex-1 py-3 text-xs font-semibold transition-colors relative"
+          style={{ color: tab === "consistency" ? "#0d9488" : "#6d7a77" }}
         >
-          Konsistensi {issues.length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs" style={{ background: "#FEE2E2", color: "var(--red)" }}>{issues.length}</span>}
+          Konsistensi{" "}
+          {issues.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-red-50 text-red-500">
+              {issues.length}
+            </span>
+          )}
           {tab === "consistency" && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: "var(--teal)" }} />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
           )}
         </button>
       </div>
@@ -78,19 +154,22 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
       <div className="flex-1 overflow-y-auto">
         {tab === "bias" && (
           <div className="p-4 space-y-2">
-            {/* Summary */}
             {biasResult?.summary && (
-              <div className="rounded-xl p-4 mb-3" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                <p className="text-xs font-600 mb-1" style={{ color: "var(--text-muted)" }}>RINGKASAN</p>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{biasResult.summary}</p>
-                <div className="flex gap-3 mt-3">
+              <div className="rounded-xl p-4 mb-3 bg-[#f0fdfa] border border-[#e5eeff]">
+                <p className="text-[10px] font-bold text-[#6d7a77] uppercase tracking-widest mb-1">
+                  Ringkasan
+                </p>
+                <p className="text-xs leading-relaxed text-[#3d4947]">{biasResult.summary}</p>
+                <div className="flex gap-4 mt-3">
                   {(["high", "medium", "low"] as const).map((sev) => {
                     const count = biases.filter((b) => b.severity === sev).length;
                     const cfg = sevColor[sev];
                     return (
                       <div key={sev} className="text-center">
-                        <p className="text-base font-700" style={{ color: cfg.text }}>{count}</p>
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{cfg.label}</p>
+                        <p className="text-base font-bold" style={{ color: cfg.text }}>
+                          {count}
+                        </p>
+                        <p className="text-xs text-[#6d7a77]">{cfg.label}</p>
                       </div>
                     );
                   })}
@@ -99,12 +178,9 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
             )}
 
             {biases.length === 0 ? (
-              <div
-                className="rounded-xl p-5 text-center"
-                style={{ background: "var(--green-bg)", border: "1px solid #BBF7D0" }}
-              >
-                <p className="text-sm font-600" style={{ color: "var(--green)" }}>Tidak ada bias terdeteksi</p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Teks cukup netral dan inklusif.</p>
+              <div className="rounded-xl p-5 text-center bg-green-50 border border-green-200">
+                <p className="text-sm font-semibold text-green-600">Tidak ada bias terdeteksi</p>
+                <p className="text-xs mt-1 text-[#6d7a77]">Teks cukup netral dan inklusif.</p>
               </div>
             ) : (
               biases.map((bias, i) => {
@@ -117,28 +193,28 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
                     onClick={() => onHighlightSelect(isActive ? null : id)}
                     className="rounded-xl p-4 cursor-pointer transition-all"
                     style={{
-                      border: `1px solid ${isActive ? "var(--teal)" : "var(--border)"}`,
-                      background: isActive ? "var(--teal-bg)" : "var(--bg-card)",
+                      border: `1px solid ${isActive ? "#0d9488" : "#e5eeff"}`,
+                      background: isActive ? "#f0fdfa" : "white",
                     }}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <span
-                        className="text-xs font-600 px-2 py-0.5 rounded-full"
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
                         style={{ background: cfg.bg, color: cfg.text }}
                       >
                         {cfg.label}
                       </span>
-                      <span className="text-xs font-500" style={{ color: "var(--text-secondary)" }}>{bias.type}</span>
+                      <span className="text-xs text-[#6d7a77]">{bias.type}</span>
                     </div>
-                    <p className="text-xs italic mb-2 line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-xs italic mb-2 line-clamp-2 text-[#3d4947]">
                       "{bias.sentence}"
                     </p>
-                    <p className="text-xs leading-relaxed mb-2" style={{ color: "var(--text-muted)" }}>
+                    <p className="text-xs leading-relaxed mb-2 text-[#6d7a77]">
                       {bias.explanation}
                     </p>
-                    <div className="rounded-lg px-3 py-2" style={{ background: "var(--green-bg)", border: "1px solid #BBF7D0" }}>
-                      <p className="text-xs font-600 mb-0.5" style={{ color: "var(--green)" }}>Saran</p>
-                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{bias.suggestion}</p>
+                    <div className="rounded-lg px-3 py-2 bg-green-50 border border-green-100">
+                      <p className="text-xs font-semibold mb-0.5 text-green-600">Saran</p>
+                      <p className="text-xs leading-relaxed text-[#3d4947]">{bias.suggestion}</p>
                     </div>
                   </div>
                 );
@@ -149,18 +225,18 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
 
         {tab === "consistency" && (
           <div className="p-4 space-y-2">
-            {/* Overall */}
             {consistencyResult?.overall && (
-              <div className="rounded-xl p-4 mb-3" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
-                <p className="text-xs font-600 mb-1" style={{ color: "var(--text-muted)" }}>PENILAIAN UMUM</p>
-                <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{consistencyResult.overall}</p>
+              <div className="rounded-xl p-4 mb-3 bg-[#f0fdfa] border border-[#e5eeff]">
+                <p className="text-[10px] font-bold text-[#6d7a77] uppercase tracking-widest mb-1">
+                  Penilaian Umum
+                </p>
+                <p className="text-xs leading-relaxed text-[#3d4947]">{consistencyResult.overall}</p>
                 {sections.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-1">
                     {sections.map((s: any, i: number) => (
                       <span
                         key={i}
-                        className="text-xs px-2 py-0.5 rounded-full"
-                        style={{ background: "var(--teal-light)", color: "var(--teal-dark)" }}
+                        className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700"
                       >
                         {s.name}
                       </span>
@@ -171,12 +247,11 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
             )}
 
             {issues.length === 0 ? (
-              <div
-                className="rounded-xl p-5 text-center"
-                style={{ background: "var(--green-bg)", border: "1px solid #BBF7D0" }}
-              >
-                <p className="text-sm font-600" style={{ color: "var(--green)" }}>Dokumen konsisten</p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Tidak ada inkonsistensi signifikan.</p>
+              <div className="rounded-xl p-5 text-center bg-green-50 border border-green-200">
+                <p className="text-sm font-semibold text-green-600">Dokumen konsisten</p>
+                <p className="text-xs mt-1 text-[#6d7a77]">
+                  Tidak ada inkonsistensi signifikan.
+                </p>
               </div>
             ) : (
               issues.map((issue: any, i: number) => {
@@ -189,29 +264,29 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
                     onClick={() => onHighlightSelect(isActive ? null : id)}
                     className="rounded-xl p-4 cursor-pointer transition-all"
                     style={{
-                      border: `1px solid ${isActive ? "var(--teal)" : "var(--border)"}`,
-                      background: isActive ? "var(--teal-bg)" : "var(--bg-card)",
+                      border: `1px solid ${isActive ? "#0d9488" : "#e5eeff"}`,
+                      background: isActive ? "#f0fdfa" : "white",
                     }}
                   >
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span
-                        className="text-xs font-600 px-2 py-0.5 rounded-full"
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
                         style={{ background: cfg.bg, color: cfg.text }}
                       >
                         {cfg.label}
                       </span>
-                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>{issue.category}</span>
+                      <span className="text-xs text-[#6d7a77]">{issue.category}</span>
                     </div>
-                    <p className="text-xs font-600 mb-1" style={{ color: "var(--text-primary)" }}>{issue.title}</p>
-                    <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-                      {issue.section_a} ↔ {issue.section_b}
+                    <p className="text-xs font-semibold mb-1 text-[#0b1c30]">{issue.title}</p>
+                    <p className="text-xs mb-1 text-teal-600">
+                      {issue.section_a} vs {issue.section_b}
                     </p>
-                    <p className="text-xs leading-relaxed mb-2" style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-xs leading-relaxed mb-2 text-[#6d7a77]">
                       {issue.description}
                     </p>
-                    <div className="rounded-lg px-3 py-2" style={{ background: "var(--green-bg)", border: "1px solid #BBF7D0" }}>
-                      <p className="text-xs font-600 mb-0.5" style={{ color: "var(--green)" }}>Saran</p>
-                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{issue.suggestion}</p>
+                    <div className="rounded-lg px-3 py-2 bg-green-50 border border-green-100">
+                      <p className="text-xs font-semibold mb-0.5 text-green-600">Saran</p>
+                      <p className="text-xs leading-relaxed text-[#3d4947]">{issue.suggestion}</p>
                     </div>
                   </div>
                 );

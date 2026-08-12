@@ -119,7 +119,7 @@ export default function Home() {
             <span className="text-lg font-bold tracking-tight text-[#0b1c30]">Teliti</span>
             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-teal-50 text-teal-700 border border-teal-100">beta</span>
           </div>
-          <span className="text-xs text-[#6d7a77]">ITFest 6.0 · Universitas Paramadina</span>
+          <span className="text-xs text-[#6d7a77]"></span>
         </header>
 
         {/* Main */}
@@ -132,7 +132,7 @@ export default function Home() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-teal-400">teliti</span>?
               </h1>
               <p className="text-base text-[#3d4947]">
-                Cek bias dan konsistensi skripsi, paper, atau teks akademik lo — sekaligus, satu scan.
+                Cek bias dan konsistensi skripsi, paper, atau teks akademik lo sekaligus, satu scan.
               </p>
             </div>
 

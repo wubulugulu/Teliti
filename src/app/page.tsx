@@ -3,6 +3,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { BiasItem, AnalysisResult, ScanRecord } from "@/types";
+import {
+  FileText,
+  Bot,
+  Sparkles,
+  Search,
+  BarChart3,
+  ClipboardList,
+  TrendingUp,
+  GraduationCap,
+  ScrollText,
+  ChevronDown,
+} from "lucide-react";
+
 export default function LandingPage() {
   const router = useRouter();
 
@@ -44,14 +57,10 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="max-w-[1120px] mx-auto px-6 py-24 md:py-32 grid md:grid-cols-2 gap-16 items-center">
           <div className="flex flex-col items-start">
-            <span className="mb-5 inline-flex items-center gap-2 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse" />
-              Powered by Gemini AI
-            </span>
             <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6 text-[#0b1c30]">
               Analisis Dokumen dengan{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-teal-400">
-                Presisi AI
+                Teliti
               </span>
             </h1>
             <p className="text-lg text-[#3d4947] mb-10 max-w-lg leading-relaxed">
@@ -62,7 +71,7 @@ export default function LandingPage() {
                 onClick={() => router.push("/analyze")}
                 className="bg-teal-600 text-white text-sm font-semibold px-8 py-4 rounded-full hover:bg-teal-700 hover:shadow-[0_8px_30px_rgba(13,148,136,0.3)] hover:-translate-y-0.5 transition-all duration-300 min-h-[44px]"
               >
-                Mulai Analisis →
+                Mulai Analisis 
               </button>
               <a
                 href="#cara-kerja"
@@ -77,7 +86,7 @@ export default function LandingPage() {
               {[
                 { val: "2 Fitur", label: "dalam 1 analisis" },
                 { val: "3 Format", label: "PDF, DOCX, TXT" },
-                { val: "~10 dtk", label: "rata-rata hasil" },
+                { val: "~16 dtk", label: "rata-rata hasil" },
               ].map((s) => (
                 <div key={s.val}>
                   <div className="text-xl font-bold text-teal-600">{s.val}</div>
@@ -102,10 +111,10 @@ export default function LandingPage() {
               </div>
 
               <div className="space-y-3">
-                {/* Bias score */}
+                {/* Integrity Score */}
                 <div className="bg-teal-50 rounded-2xl p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-semibold text-teal-700">Bias Score</span>
+                    <span className="text-xs font-semibold text-teal-700">Integrity Score</span>
                     <span className="text-xl font-bold text-teal-600">72</span>
                   </div>
                   <div className="h-2 bg-teal-100 rounded-full overflow-hidden">
@@ -113,22 +122,11 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                {/* Consistency score */}
-                <div className="bg-blue-50 rounded-2xl p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-semibold text-blue-700">Konsistensi Score</span>
-                    <span className="text-xl font-bold text-blue-600">85</span>
-                  </div>
-                  <div className="h-2 bg-blue-100 rounded-full overflow-hidden">
-                    <div className="h-full w-[85%] bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" />
-                  </div>
-                </div>
-
                 {/* Issues */}
                 <div className="space-y-2">
                   {[
                     { label: "Gender Bias", sev: "high", color: "bg-red-100 text-red-600" },
-                    { label: "Inkonsistensi Bab III↔V", sev: "medium", color: "bg-amber-100 text-amber-600" },
+                    { label: "Inkonsistensi Bab III", sev: "medium", color: "bg-amber-100 text-amber-600" },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-gray-100">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${item.color}`}>{item.sev}</span>
@@ -146,19 +144,19 @@ export default function LandingPage() {
           <div className="max-w-[1120px] mx-auto px-6 text-center">
             <h2 className="text-4xl font-bold tracking-tight text-[#0b1c30] mb-4">Cara Kerja Teliti</h2>
             <p className="text-lg text-[#3d4947] max-w-2xl mx-auto mb-16">
-              Tiga langkah — satu upload, dua hasil analisis.
+              Tiga langkah satu upload, dua hasil analisis.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
               {/* Connector line */}
               <div className="hidden md:block absolute top-1/3 left-[18%] right-[18%] h-px bg-gradient-to-r from-transparent via-teal-300 to-transparent z-0" />
               {[
-                { step: "1", title: "Unggah Dokumen", desc: "Upload PDF, DOCX, atau tempel teks langsung. Maksimal 10MB.", icon: "📄" },
-                { step: "2", title: "AI Menganalisis", desc: "Gemini & Groq AI bekerja paralel — deteksi bias + cek konsistensi sekaligus.", icon: "🤖" },
-                { step: "3", title: "Terima Insight", desc: "Hasil lengkap: score, temuan per kategori, dan saran perbaikan konkret.", icon: "✨" },
+                { step: "1", title: "Unggah Dokumen", desc: "Upload PDF, DOCX, atau tempel teks langsung. Maksimal 10MB.", Icon: FileText },
+                { step: "2", title: "AI Menganalisis", desc: "Gemini & Groq AI bekerja paralel deteksi bias + cek konsistensi sekaligus.", Icon: Bot },
+                { step: "3", title: "Terima Insight", desc: "Hasil lengkap: score, temuan per kategori, dan saran perbaikan konkret.", Icon: Sparkles },
               ].map((item) => (
                 <div key={item.step} className="relative z-10 bg-white/70 backdrop-blur-sm border border-white/60 p-8 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_32px_rgba(13,148,136,0.12)] hover:-translate-y-1 transition-all duration-300 flex flex-col items-center">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-100 to-teal-50 flex items-center justify-center mb-5 text-3xl shadow-inner">
-                    {item.icon}
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-100 to-teal-50 flex items-center justify-center mb-5 shadow-inner">
+                    <item.Icon className="w-7 h-7 text-teal-600" strokeWidth={1.75} />
                   </div>
                   <div className="text-xs font-bold text-teal-500 mb-1">Langkah {item.step}</div>
                   <h4 className="text-lg font-bold text-[#0b1c30] mb-2">{item.title}</h4>
@@ -174,30 +172,28 @@ export default function LandingPage() {
           <div className="max-w-[1120px] mx-auto px-6">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold tracking-tight text-[#0b1c30] mb-4">Dua Fitur, Satu Analisis</h2>
-              <p className="text-lg text-[#3d4947] max-w-xl mx-auto">Sekarang lo gak perlu pilih — keduanya jalan otomatis.</p>
+              <p className="text-lg text-[#3d4947] max-w-xl mx-auto">Sekarang lo gak perlu pilih keduanya jalan otomatis.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
                 {
-                  icon: "🔍",
+                  Icon: Search,
                   badge: "Deteksi Bias",
                   title: "Bias yang Tak Terlihat",
-                  desc: "Identifikasi gender bias, age bias, socioeconomic bias, cultural bias, dan lainnya — lengkap dengan score per temuan dan saran perbaikan kalimat.",
+                  desc: "Identifikasi gender bias, age bias, socioeconomic bias, cultural bias, dan lainnya lengkap dengan score per temuan dan saran perbaikan kalimat.",
                   tags: ["Gender", "Usia", "Budaya", "Rasial", "Konfirmasi"],
-                  gradient: "from-teal-500 to-teal-400",
                 },
                 {
-                  icon: "📊",
+                  Icon: BarChart3,
                   badge: "Cek Konsistensi",
                   title: "Keselarasan Antar Bab",
                   desc: "Pastikan Tujuan, Metode, Hasil, dan Kesimpulan saling mendukung. AI deteksi inkonsistensi logis, angka, terminologi, dan klaim referensi.",
                   tags: ["Logika", "Data & Angka", "Metodologi", "Terminologi"],
-                  gradient: "from-blue-500 to-blue-400",
                 },
               ].map((f) => (
                 <div key={f.badge} className="bg-white/70 backdrop-blur-sm border border-white/60 p-10 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_32px_rgba(13,148,136,0.12)] hover:-translate-y-1 transition-all duration-300">
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-5 shadow-lg text-xl`}>
-                    {f.icon}
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center mb-5">
+                    <f.Icon className="w-6 h-6 text-teal-600" strokeWidth={1.75} />
                   </div>
                   <span className="text-xs font-bold text-teal-600 uppercase tracking-widest mb-2 block">{f.badge}</span>
                   <h3 className="text-2xl font-bold text-[#0b1c30] mb-3">{f.title}</h3>
@@ -222,13 +218,15 @@ export default function LandingPage() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { icon: "📋", label: "Proposal Bisnis" },
-                { icon: "📈", label: "Laporan Tahunan" },
-                { icon: "🎓", label: "Karya Ilmiah" },
-                { icon: "📜", label: "Naskah Kebijakan" },
+                { Icon: ClipboardList, label: "Proposal Bisnis" },
+                { Icon: TrendingUp, label: "Laporan Tahunan" },
+                { Icon: GraduationCap, label: "Karya Ilmiah" },
+                { Icon: ScrollText, label: "Naskah Kebijakan" },
               ].map((d) => (
                 <div key={d.label} className="bg-white/70 backdrop-blur-sm border border-white/60 p-6 rounded-2xl flex flex-col items-center justify-center gap-3 text-center hover:shadow-[0_0_20px_rgba(13,148,136,0.15)] hover:-translate-y-0.5 transition-all duration-300 group">
-                  <span className="text-3xl group-hover:scale-110 transition-transform duration-300">{d.icon}</span>
+                  <span className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <d.Icon className="w-5 h-5 text-teal-600" strokeWidth={1.75} />
+                  </span>
                   <span className="text-sm font-semibold text-[#0b1c30]">{d.label}</span>
                 </div>
               ))}
@@ -250,7 +248,7 @@ export default function LandingPage() {
                 <details key={item.q} className="group bg-white/70 backdrop-blur-sm rounded-2xl border border-white/60 p-6 open:bg-white/90 transition-colors">
                   <summary className="flex justify-between items-center font-semibold text-[#0b1c30] cursor-pointer list-none text-base">
                     {item.q}
-                    <span className="ml-4 text-teal-500 transition-transform duration-200 group-open:rotate-180">▾</span>
+                    <ChevronDown className="w-4 h-4 ml-4 text-teal-500 transition-transform duration-200 group-open:rotate-180" strokeWidth={2} />
                   </summary>
                   <p className="text-sm text-[#3d4947] mt-4 leading-relaxed">{item.a}</p>
                 </details>
@@ -273,7 +271,7 @@ export default function LandingPage() {
               onClick={() => router.push("/analyze")}
               className="bg-teal-600 text-white text-base font-bold px-12 py-5 rounded-full hover:bg-teal-700 hover:shadow-[0_10px_40px_rgba(13,148,136,0.4)] hover:-translate-y-1 transition-all duration-300 min-h-[44px] relative z-10"
             >
-              Mulai Analisis Sekarang →
+              Mulai Analisis Sekarang 
             </button>
           </div>
         </section>
@@ -292,7 +290,7 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="text-xs text-[#6d7a77] text-center md:text-right">
-            © 2025 Teliti AI · ITFest 6.0<br />
+            © 2026 Teliti AI<br />
             <span className="opacity-60">by @wubulugulu</span>
           </div>
         </div>
