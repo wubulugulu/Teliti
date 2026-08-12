@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import type { BiasItem } from "@/types";
 
 type Issue = {
@@ -21,67 +21,109 @@ type Props = {
   onHighlightClick: (id: string | null) => void;
 };
 
-function escapeRegex(str: string) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Normalize teks: collapse whitespace, newline, dan karakter aneh
+// supaya string dari Gemini (yang mungkin punya spasi berbeda) bisa match
+// dengan teks dari PDF extraction.
+function normalizeStr(s: string): string {
+  return s
+    .replace(/\s+/g, " ")
+    .replace(/['']/g, "'")
+    .replace(/[""]/g, '"')
+    .replace(/\u00a0/g, " ") // non-breaking space
+    .trim();
 }
 
-export default function DocumentViewer({ text, biases, issues, activeHighlight, onHighlightClick }: Props) {
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Buat regex yang toleran whitespace:
+// setiap spasi di pattern jadi \s+ supaya match walau ada newline/double-space
+function buildFlexibleRegex(raw: string): RegExp | null {
+  const normalized = normalizeStr(raw);
+  if (normalized.length < 8) return null;
+
+  // Ambil max 120 char untuk hindari sentence yang terlalu panjang / truncated
+  const chunk = normalized.slice(0, 120);
+
+  // Split per kata, escape tiap kata, join dengan \s+
+  const pattern = chunk
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeRegex)
+    .join("\\s+");
+
+  try {
+    return new RegExp(pattern, "gi");
+  } catch {
+    return null;
+  }
+}
+
+export default function DocumentViewer({
+  text,
+  biases,
+  issues,
+  activeHighlight,
+  onHighlightClick,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Build highlight list — hanya bias (sentence field dari Gemini)
+  // Consistency tidak di-highlight karena issue title ≠ kalimat di teks
   const highlights = useMemo(() => {
-    const map: { sentence: string; id: string; kind: "bias" | "consistency" }[] = [];
+    const map: { sentence: string; id: string; kind: "bias" }[] = [];
     biases.forEach((b, i) => {
-      if (b.sentence) map.push({ sentence: b.sentence, id: `bias-${i}`, kind: "bias" });
+      if (b.sentence && b.sentence.trim().length >= 8) {
+        map.push({ sentence: b.sentence, id: `bias-${i}`, kind: "bias" });
+      }
     });
-    return map;
-  }, [biases, issues]);
+    // Sort terpanjang dulu supaya tidak ada partial overlap
+    return map.sort((a, b) => b.sentence.length - a.sentence.length);
+  }, [biases]);
 
   const html = useMemo(() => {
     if (!text) return "";
 
+    // Step 1: escape HTML chars di teks asli
     let result = text
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    const sorted = [...highlights].sort((a, b) => b.sentence.length - a.sentence.length);
-    console.log("highlights to match:", sorted.map(h => ({ id: h.id, sentence: h.sentence.slice(0, 80) })));
-    console.log("text sample:", result.slice(0, 300));
-    for (const h of sorted) {
-      const escaped = escapeRegex(
-        h.sentence.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    // Step 2: apply highlights pakai flexible regex
+    for (const h of highlights) {
+      const regex = buildFlexibleRegex(h.sentence);
+      if (!regex) continue;
+
+      // $& = matched string (teks asli tetap intact, tidak diganti Gemini version)
+      result = result.replace(
+        regex,
+        `<mark class="teliti-bias-highlight" data-id="${h.id}">$&</mark>`
       );
-      if (!escaped || escaped.length < 5) continue;
-      try {
-        const regex = new RegExp(escaped, "g");
-        const cls = h.kind === "bias" ? "teliti-bias-highlight" : "teliti-consistency-highlight";
-        const safeInner = h.sentence
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-        result = result.replace(
-          regex,
-          `<mark class="${cls}" data-id="${h.id}">${safeInner}</mark>`
-        );
-      } catch {
-        // skip invalid regex
-      }
     }
 
+    // Step 3: convert newlines ke paragraf
     result = result
       .split(/\n\n+/)
-      .map((p) => `<p style="margin-bottom:1rem;line-height:1.75">${p.replace(/\n/g, "<br/>")}</p>`)
+      .map(
+        (p) =>
+          `<p style="margin-bottom:1.1rem;line-height:1.8">${p.replace(/\n/g, "<br/>")}</p>`
+      )
       .join("");
 
     return result;
   }, [text, highlights]);
 
+  // Scroll ke highlight yang aktif
   useEffect(() => {
     if (!activeHighlight || !containerRef.current) return;
     const el = containerRef.current.querySelector(`[data-id="${activeHighlight}"]`);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      containerRef.current.querySelectorAll(".teliti-active").forEach((e) => e.classList.remove("teliti-active"));
+      containerRef.current
+        .querySelectorAll(".teliti-active")
+        .forEach((e) => e.classList.remove("teliti-active"));
       el.classList.add("teliti-active");
     }
   }, [activeHighlight]);
@@ -100,11 +142,19 @@ export default function DocumentViewer({ text, biases, issues, activeHighlight, 
         <div className="text-center">
           <div className="w-12 h-12 rounded-2xl bg-[#e5eeff] flex items-center justify-center mx-auto mb-3">
             <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
-              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="#6d7a77" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                stroke="#6d7a77"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
           <p className="text-sm font-medium text-[#0b1c30]">Teks dokumen tidak tersedia</p>
-          <p className="text-xs mt-1 text-[#6d7a77]">PDF mungkin tidak mengandung teks yang bisa diekstrak</p>
+          <p className="text-xs mt-1 text-[#6d7a77]">
+            PDF mungkin tidak mengandung teks yang bisa diekstrak
+          </p>
         </div>
       </div>
     );
@@ -112,16 +162,20 @@ export default function DocumentViewer({ text, biases, issues, activeHighlight, 
 
   return (
     <>
-      {/* Inject highlight styles */}
       <style>{`
         .teliti-bias-highlight {
           background: #FDE047;
           border-radius: 3px;
           padding: 0 2px;
           cursor: pointer;
-          transition: background 0.15s;
+          transition: background 0.15s, outline 0.15s;
+          text-decoration: underline;
+          text-decoration-color: #EAB308;
+          text-underline-offset: 2px;
         }
-        .teliti-bias-highlight:hover,
+        .teliti-bias-highlight:hover {
+          background: #FCD34D;
+        }
         .teliti-bias-highlight.teliti-active {
           background: #EAB308;
           outline: 2px solid #CA8A04;
@@ -145,7 +199,9 @@ export default function DocumentViewer({ text, biases, issues, activeHighlight, 
       <div className="flex flex-col h-full overflow-hidden">
         {/* Toolbar */}
         <div className="flex items-center gap-4 px-6 py-2.5 border-b border-[#e5eeff] bg-white/80 backdrop-blur-sm flex-shrink-0">
-          <p className="text-xs font-semibold text-[#6d7a77] uppercase tracking-widest">Dokumen</p>
+          <p className="text-xs font-semibold text-[#6d7a77] uppercase tracking-widest">
+            Dokumen
+          </p>
           <div className="flex items-center gap-4 ml-auto">
             {biases.length > 0 && (
               <div className="flex items-center gap-1.5">
