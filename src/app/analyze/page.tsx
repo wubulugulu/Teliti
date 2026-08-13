@@ -1,10 +1,14 @@
 "use client";
-import type { BiasItem, AnalysisResult, ScanRecord } from "@/types";
-import { useState, useRef, useCallback } from "react";
+import type { ScanRecord } from "@/types";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import ResultPanel from "@/components/ResultPanel";
 import DocumentViewer from "@/components/DocumentViewer";
+import { saveScan, loadScans } from "@/lib/supabase/history";
+import { createClient } from "@/lib/supabase/client";
 
 export default function Home() {
+  const router = useRouter();
   const [stage, setStage] = useState<"input" | "result">("input");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -17,6 +21,23 @@ export default function Home() {
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Load history dari Supabase saat mount
+  useEffect(() => {
+    loadScans().then((scans) => {
+      setHistory(scans);
+      if (scans.length > 0) {
+        setActiveScan(scans[0]);
+        setStage("result");
+      }
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    location.href = "/login";
+  };
 
   const processFile = async (f: File) => {
     setFileLoading(true);
@@ -59,7 +80,6 @@ export default function Home() {
         formData.append("file", file);
         const res = await fetch("/api/integrity-check", { method: "POST", body: formData });
         data = await res.json();
-        console.log("documentText:", data.documentText?.slice(0, 200));
         if (!res.ok) throw new Error(data.error || "Gagal menganalisis");
         docText = data.documentText || "";
       } else {
@@ -71,6 +91,7 @@ export default function Home() {
         data = await res.json();
         if (!res.ok) throw new Error(data.error || "Gagal menganalisis");
       }
+
       const record: ScanRecord = {
         id: Date.now().toString(),
         fileName: file?.name || "Teks langsung",
@@ -80,6 +101,11 @@ export default function Home() {
         consistencyResult: data.consistencyResult ?? null,
         documentText: docText,
       };
+
+      // Simpan ke Supabase
+      const saved = await saveScan(record);
+      if (saved) record.id = saved.id;
+
       setHistory((prev) => [record, ...prev]);
       setActiveScan(record);
       setStage("result");
@@ -106,26 +132,30 @@ export default function Home() {
   if (stage === "input") {
     return (
       <div className="min-h-screen flex flex-col bg-[#f0fdfa]">
-        {/* Background blobs */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-teal-200/30 rounded-full blur-[100px]" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-blue-200/30 rounded-full blur-[100px]" />
         </div>
 
-        {/* Header */}
         <header className="relative z-10 flex items-center justify-between px-8 py-4 bg-white/60 backdrop-blur-md border-b border-white/40">
-          <div className="flex items-center gap-2">
+          <div
+            onClick={() => router.push("/")}
+            className="flex items-center gap-2 cursor-pointer"
+          >
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
             <span className="text-lg font-bold tracking-tight text-[#0b1c30]">Teliti</span>
             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-teal-50 text-teal-700 border border-teal-100">beta</span>
           </div>
-          <span className="text-xs text-[#6d7a77]"></span>
+          <button
+            onClick={handleLogout}
+            className="text-xs px-4 py-1.5 rounded-full bg-red-500 text-white font-semibold hover:bg-red-600 hover:shadow-[0_4px_14px_rgba(239,68,68,0.35)] transition-all"
+          >
+            Keluar
+          </button>
         </header>
 
-        {/* Main */}
         <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-16">
           <div className="w-full max-w-2xl">
-            {/* Hero */}
             <div className="mb-10 text-center">
               <h1 className="text-4xl font-extrabold tracking-tight mb-3 leading-tight text-[#0b1c30]">
                 Dokumen lo sudah{" "}
@@ -136,19 +166,15 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Drop zone */}
             <div
               onDrop={handleDrop}
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onClick={() => !file && fileRef.current?.click()}
-              className={`rounded-2xl border-2 border-dashed transition-all mb-4 p-7 ${
-                dragging
-                  ? "border-teal-500 bg-teal-50"
-                  : file
-                  ? "border-teal-400 bg-teal-50/50"
+              className={`rounded-2xl border-2 border-dashed transition-all mb-4 p-7 ${dragging ? "border-teal-500 bg-teal-50"
+                : file ? "border-teal-400 bg-teal-50/50"
                   : "border-[#bcc9c6] bg-white/70 hover:border-teal-300 hover:bg-white/90 cursor-pointer"
-              }`}
+                }`}
             >
               {fileLoading ? (
                 <div className="flex flex-col items-center gap-3 py-4">
@@ -181,8 +207,8 @@ export default function Home() {
                 <div className="flex flex-col items-center gap-2 py-4 text-center">
                   <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-1">
                     <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
-                      <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round"/>
+                      <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
                   </div>
                   <p className="text-sm font-medium text-[#0b1c30]">
@@ -194,7 +220,6 @@ export default function Home() {
               <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} className="hidden" />
             </div>
 
-            {/* Divider + Textarea */}
             {!isPDF && (
               <>
                 <div className="flex items-center gap-3 mb-4">
@@ -220,22 +245,19 @@ export default function Home() {
               </>
             )}
 
-            {/* Error */}
             {error && (
               <div className="rounded-xl px-4 py-3 mb-4 text-sm bg-red-50 text-red-600 border border-red-100">
                 {error}
               </div>
             )}
 
-            {/* Scan button */}
             <button
               onClick={scan}
               disabled={!canScan}
-              className={`w-full py-3.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                canScan
-                  ? "bg-teal-600 text-white hover:bg-teal-700 hover:shadow-[0_4px_20px_rgba(13,148,136,0.3)]"
-                  : "bg-[#e5eeff] text-[#6d7a77] cursor-not-allowed"
-              }`}
+              className={`w-full py-3.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${canScan
+                ? "bg-teal-600 text-white hover:bg-teal-700 hover:shadow-[0_4px_20px_rgba(13,148,136,0.3)]"
+                : "bg-[#e5eeff] text-[#6d7a77] cursor-not-allowed"
+                }`}
             >
               {loading ? (
                 <>
@@ -245,7 +267,6 @@ export default function Home() {
               ) : "Scan Dokumen"}
             </button>
 
-            {/* Feature grid */}
             <div className="mt-8 grid grid-cols-2 gap-2">
               {[
                 { label: "Deteksi Bias", desc: "Gender, usia, ras, konfirmasi, dll" },
@@ -268,36 +289,40 @@ export default function Home() {
   // ── RESULT STAGE ──────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#f0fdfa]">
-      {/* Header */}
       <header className="flex items-center justify-between px-5 py-3 border-b border-[#e5eeff] bg-white/80 backdrop-blur-md flex-shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen((v) => !v)}
             className="p-1.5 rounded-lg text-[#3d4947] hover:bg-teal-50 transition-colors"
-            title="Toggle sidebar"
           >
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-              <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            <svg
+              width="18" height="18" fill="none" viewBox="0 0 24 24"
+              className={`transition-transform duration-300 ease-in-out ${sidebarOpen ? "rotate-0" : "rotate-180"}`}
+            >
+              <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
           </button>
-          <div className="flex items-center gap-2">
+          <div
+            onClick={() => router.push("/")}
+            className="flex items-center gap-2 cursor-pointer"
+          >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
             <span className="text-base font-bold tracking-tight text-[#0b1c30]">Teliti</span>
           </div>
         </div>
-        <button
-          onClick={reset}
-          className="text-xs px-4 py-2 rounded-lg font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100 transition-colors"
-        >
-          + Scan Baru
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleLogout}
+            className="text-xs px-4 py-1.5 rounded-full bg-red-500 text-white font-semibold hover:bg-red-600 hover:shadow-[0_4px_14px_rgba(239,68,68,0.35)] transition-all"
+          >
+            Keluar
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
         {sidebarOpen && (
           <aside className="w-60 flex-shrink-0 border-r border-[#e5eeff] bg-white/70 flex flex-col overflow-hidden">
-            {/* Sidebar header */}
             <div className="px-4 py-4 border-b border-[#e5eeff]">
               <p className="text-[10px] font-bold text-[#6d7a77] uppercase tracking-widest mb-3">Scan History</p>
               <button
@@ -317,20 +342,18 @@ export default function Home() {
                 <button
                   key={record.id}
                   onClick={() => { setActiveScan(record); setActiveHighlight(null); }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${
-                    activeScan?.id === record.id
-                      ? "bg-teal-50 border border-teal-200"
-                      : "hover:bg-[#f0fdfa]"
-                  }`}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${activeScan?.id === record.id
+                    ? "bg-teal-50 border border-teal-200"
+                    : "hover:bg-[#f0fdfa]"
+                    }`}
                 >
                   <p className={`text-xs font-medium truncate mb-0.5 ${activeScan?.id === record.id ? "text-teal-700" : "text-[#0b1c30]"}`}>
                     {record.fileName}
                   </p>
                   <div className="flex items-center gap-2">
                     {record.integrityScore !== null && (
-                      <span className={`text-xs font-bold ${
-                        record.integrityScore >= 75 ? "text-teal-600" : record.integrityScore >= 50 ? "text-amber-500" : "text-red-500"
-                      }`}>
+                      <span className={`text-xs font-bold ${record.integrityScore >= 75 ? "text-teal-600" : record.integrityScore >= 50 ? "text-amber-500" : "text-red-500"
+                        }`}>
                         {record.integrityScore}/100
                       </span>
                     )}
@@ -342,18 +365,10 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Sidebar footer */}
-            <div className="border-t border-[#e5eeff] px-4 py-3 space-y-1">
-              {["Scans", "Documents", "Drafts", "Analytics", "Archive"].map((item) => (
-                <button key={item} className="w-full text-left text-xs text-[#6d7a77] hover:text-teal-600 px-2 py-1.5 rounded-lg hover:bg-teal-50 transition-colors">
-                  {item}
-                </button>
-              ))}
-            </div>
+            
           </aside>
         )}
 
-        {/* Document viewer */}
         <div className="flex-1 overflow-hidden flex flex-col bg-white/50">
           {activeScan && (
             <DocumentViewer
@@ -366,7 +381,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Result panel */}
         <div className="w-96 flex-shrink-0 border-l border-[#e5eeff] overflow-y-auto bg-white/70">
           {activeScan && (
             <ResultPanel

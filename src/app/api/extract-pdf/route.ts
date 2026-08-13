@@ -3,7 +3,7 @@ import pdf from 'pdf-parse/lib/pdf-parse.js';
 import { createCanvas, Canvas, CanvasRenderingContext2D as NodeCanvasContext2D } from 'canvas';
 import path from 'path';
 import { pathToFileURL } from 'url';
-
+export const maxDuration = 60;
 const MAX_CHECK_PAGES = 30;
 const MAX_IMAGES_TO_SEND = 10;
 const TARGET_MAX_IMAGE_DIMENSION = 1000;

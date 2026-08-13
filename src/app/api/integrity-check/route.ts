@@ -5,7 +5,7 @@ import { checkConsistency } from "@/lib/consistency-check";
 import { GeminiCallError } from "@/lib/gemini-client";
 import { extractPdf, PdfExtractError, type FigureReference, type InlineImage } from "@/lib/pdf-extract";
 import type { ConsistencyResult } from "@/components/ConsistencyResult";
-
+export const maxDuration = 60;
 // Bobot Integrity Score. Consistency dibobot sama besar dengan bias karena
 // keduanya sama-sama merepresentasikan "integritas" dokumen dari sisi
 // berbeda (kejujuran metodologis vs netralitas penyajian). Diletakkan di
