@@ -75,6 +75,7 @@ export async function rewriteDocument(
   }
 
   const raw = response.text?.trim() ?? "";
+  console.log("RAW GEMINI REWRITE:", raw.slice(0, 500)); // tambah ini
   if (!raw) {
     throw new GeminiCallError(502, "Gagal membuat dokumen revisi. Coba lagi.");
   }
