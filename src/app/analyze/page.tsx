@@ -140,11 +140,10 @@ export default function Home() {
         <header className="relative z-10 flex items-center justify-between px-8 py-4 bg-white/60 backdrop-blur-md border-b border-white/40">
           <div
             onClick={() => router.push("/")}
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
-            <span className="text-lg font-bold tracking-tight text-[#0b1c30]">Teliti</span>
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-teal-50 text-teal-700 border border-teal-100">beta</span>
+            <img src="/logo.svg" alt="Teliti" className="h-8" />
+            
           </div>
           <button
             onClick={handleLogout}
@@ -304,10 +303,9 @@ export default function Home() {
           </button>
           <div
             onClick={() => router.push("/")}
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center cursor-pointer"
           >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
-            <span className="text-base font-bold tracking-tight text-[#0b1c30]">Teliti</span>
+            <img src="/logo.svg" alt="Teliti" className="h-6" />
           </div>
         </div>
         <div className="flex items-center gap-2">

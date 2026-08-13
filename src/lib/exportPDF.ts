@@ -1,16 +1,46 @@
 import type { ScanRecord } from "@/types";
 
+/**
+ * Rasterize file SVG (mis. /logo-T.svg) jadi data URL PNG, karena jsPDF
+ * gak bisa render SVG secara native — cuma nerima PNG/JPEG lewat addImage.
+ * Dijalankan di browser (canvas), makanya exportToPDF harus tetap client-side.
+ */
+async function svgToPngDataUrl(svgUrl: string, size = 128): Promise<string | null> {
+  try {
+    const res = await fetch(svgUrl);
+    if (!res.ok) throw new Error(`SVG not found: ${res.status}`);
+    const svgText = await res.text();
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = url;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context gagal dibuat");
+    ctx.drawImage(img, 0, 0, size, size);
+
+    URL.revokeObjectURL(url);
+    return canvas.toDataURL("image/png");
+  } catch (e) {
+    console.warn("Gagal rasterize logo SVG buat PDF:", e);
+    return null;
+  }
+}
+
 export async function exportToPDF(scan: ScanRecord): Promise<void> {
   const { default: jsPDF } = await import("jspdf");
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-  // ── FONT EMBED (Plus Jakarta Sans) ──────────────────────────────────
-  // jsPDF cuma punya helvetica/times/courier built-in. Buat pakai Plus
-  // Jakarta Sans, harus embed file .ttf sebagai base64 lewat VFS.
-  // Taruh file font di public/fonts/, lalu fetch + convert base64 di sini,
-  // ATAU generate module base64 statis (lihat catatan di bawah file ini).
-  let FONT = "helvetica"; // fallback aman kalau embed gagal
+  let FONT = "helvetica";
   try {
     const [regularRes, boldRes] = await Promise.all([
       fetch("/fonts/PlusJakartaSans-Regular.ttf"),
@@ -39,12 +69,8 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
   } catch (e) {
     console.warn("Font embed gagal, fallback ke helvetica:", e);
   }
-  // NOTE: TTF custom di jsPDF cuma bisa punya style "normal" dan "bold" per
-  // family yang di-register. Gak ada bolditalic/italic asli kecuali kamu
-  // embed file .ttf italic terpisah dan register style "italic" /
-  // "bolditalic" sendiri. Di bawah, semua pemakaian "bolditalic" diganti
-  // "bold" biar konsisten dengan 1 family ini (quote tetap dikasih tanda
-  // kutip manual sebagai penanda visual, bukan italic).
+
+  const logoDataUrl = await svgToPngDataUrl("/logo-T.svg", 128);
 
   const pageW = 210;
   const pageH = 297;
@@ -56,7 +82,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
   const issues = scan.consistencyResult?.issues ?? [];
   const integrityScore = scan.integrityScore ?? 0;
 
-  // Colors
   const TEAL: [number, number, number] = [13, 148, 136];
   const TEAL_LIGHT: [number, number, number] = [240, 253, 250];
   const TEAL_DARK: [number, number, number] = [15, 118, 110];
@@ -90,11 +115,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
     return { color: GREEN, bg: GREEN_LIGHT, label: "Rendah", border: GREEN };
   }
 
-  // ── FIX UTAMA ────────────────────────────────────────────────────
-  // wrapText sekarang WAJIB set font+style yang SAMA PERSIS dengan yang
-  // dipakai saat render. Ini yang bikin teks overflow sebelumnya: font
-  // di-set SETELAH wrap, jadi lebar yang dihitung beda dengan lebar
-  // aktual pas ditulis.
   function wrapText(
     text: string,
     maxW: number,
@@ -108,9 +128,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
     let cur = "";
     for (const w of words) {
       const test = cur ? `${cur} ${w}` : w;
-      // guard: kalau satu kata sendirian sudah lebih lebar dari maxW
-      // (kata panjang tanpa spasi), paksa masuk baris sendiri biar
-      // gak infinite-loop / gak pernah ke-push.
       if (doc.getTextWidth(test) <= maxW || !cur) {
         cur = test;
       } else {
@@ -136,21 +153,27 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
   doc.setLineWidth(0.3);
   doc.line(0, 22, pageW, 22);
 
-  doc.setFontSize(11);
-  doc.setFont(FONT, "bold");
-  doc.setTextColor(...TEAL);
-  doc.text("t", margin, 14);
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", margin, 7, 7, 7);
+  } else {
+    doc.setFillColor(...TEAL);
+    doc.roundedRect(margin, 7, 7, 7, 1.5, 1.5, "F");
+    doc.setFontSize(9);
+    doc.setFont(FONT, "bold");
+    doc.setTextColor(...WHITE);
+    doc.text("T", margin + 3.5, 12, { align: "center" });
+  }
 
   doc.setFontSize(8);
   doc.setFont(FONT, "bold");
   doc.setTextColor(...TEXT);
-  doc.text("Document Analysis Report", margin + 6, 11);
+  doc.text("Document Analysis Report", margin + 10, 11);
 
   doc.setFontSize(7);
   doc.setFont(FONT, "normal");
   doc.setTextColor(...MUTED);
   const fileName = scan.fileName || "Dokumen";
-  doc.text(fileName, margin + 6, 16.5);
+  doc.text(fileName, margin + 10, 16.5);
 
   const dateStr = scan.timestamp instanceof Date
     ? scan.timestamp.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
@@ -306,8 +329,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
   } else {
     biases.forEach((bias, idx) => {
       const cfg = sevCfg(bias.severity);
-
-      // FIX: wrap pakai style "bold" karena dirender bold (pengganti bolditalic)
       const sentLines = wrapText(`"${bias.sentence}"`, contentW - 20, 7.5, "bold");
       const expLines = wrapText(bias.explanation, contentW - 14, 7.5, "normal");
       const sugLines = wrapText(bias.suggestion, contentW - 20, 7.5, "normal");
@@ -347,7 +368,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
       doc.line(margin + 7, cy, margin + contentW - 4, cy);
       cy += 4;
 
-      // Sentence — render pakai FONT+bold (font custom gak punya italic asli)
       doc.setFontSize(7.5);
       doc.setFont(FONT, "bold");
       doc.setTextColor(...TEXT);
@@ -424,9 +444,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
     issues.forEach((issue: any, idx: number) => {
       const cfg = sevCfg(issue.severity);
       const titleLines = wrapText(issue.title, contentW - 20, 8, "bold");
-      // FIX: section_a/section_b bisa panjang (contoh: "Methods (2.7 User-Based
-      // Evaluation / Figure 7)  →  Results and Discussions (3.4 Discussion / Table 2)")
-      // — sebelumnya SAMA SEKALI gak di-wrap, makanya paling parah overflow-nya.
       const sectionLines = wrapText(
         `${issue.section_a}  →  ${issue.section_b}`,
         contentW - 14,
@@ -485,7 +502,6 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
 
       cy += 1;
 
-      // Section arrow — sekarang di-wrap dan render per-baris
       doc.setFontSize(7);
       doc.setFont(FONT, "normal");
       doc.setTextColor(...TEAL);

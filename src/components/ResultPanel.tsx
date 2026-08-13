@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ScanRecord } from "@/types";
+import { setScanPublic } from "@/lib/supabase/history";
 
 type Props = {
   scan: ScanRecord;
@@ -34,10 +35,12 @@ function IntegrityGauge({
   score,
   onExport,
   exporting,
+  onShare,
 }: {
   score: number;
   onExport: () => void;
   exporting: boolean;
+  onShare: () => void;
 }) {
   const color = scoreColor(score);
   const label = scoreLabel(score);
@@ -48,26 +51,37 @@ function IntegrityGauge({
         <p className="text-[10px] font-bold text-[#6d7a77] uppercase tracking-widest">
           Integrity Score
         </p>
-        <button
-          onClick={onExport}
-          disabled={exporting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors disabled:opacity-50"
-        >
-          {exporting ? (
-            <div className="w-3 h-3 rounded-full border-2 border-teal-300 border-t-teal-600 animate-spin" />
-          ) : (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onShare}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#f0fdfa] text-[#0b1c30] border border-[#e5eeff] hover:bg-teal-50 transition-colors"
+          >
             <svg width="12" height="12" fill="none" viewBox="0 0 24 24">
-              <path
-                d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              <path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 3.9M15.4 6.6L8.6 10.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          )}
-          {exporting ? "Membuat..." : "Export PDF"}
-        </button>
+            Bagikan
+          </button>
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors disabled:opacity-50"
+          >
+            {exporting ? (
+              <div className="w-3 h-3 rounded-full border-2 border-teal-300 border-t-teal-600 animate-spin" />
+            ) : (
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24">
+                <path
+                  d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+            {exporting ? "Membuat..." : "Export PDF"}
+          </button>
+        </div>
       </div>
       <div className="flex items-end gap-2 mb-3">
         <span className="text-5xl font-bold tabular-nums leading-none" style={{ color }}>
@@ -178,6 +192,104 @@ function RewriteModal({
   );
 }
 
+function ShareModal({
+  scanId,
+  isPublic,
+  onClose,
+  onToggle,
+}: {
+  scanId: string;
+  isPublic: boolean;
+  onClose: () => void;
+  onToggle: (v: boolean) => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [publicState, setPublicState] = useState(isPublic);
+
+  const shareUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/report/${scanId}` : "";
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(shareUrl)}`;
+
+  const handleToggle = async () => {
+    setLoading(true);
+    try {
+      await onToggle(!publicState);
+      setPublicState(!publicState);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm font-bold text-[#0b1c30] mb-1">Bagikan Laporan</p>
+        <p className="text-xs text-[#6d7a77] mb-4">
+          Siapa saja dengan link ini bisa lihat hasil analisis tanpa login.
+        </p>
+
+        <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-4 bg-[#f0fdfa] border border-[#e5eeff]">
+          <span className="text-xs font-semibold text-[#0b1c30]">
+            {publicState ? "Publik" : "Privat"}
+          </span>
+          <button
+            onClick={handleToggle}
+            disabled={loading}
+            className={`w-10 h-5.5 rounded-full transition-colors relative ${publicState ? "bg-teal-600" : "bg-[#bcc9c6]"}`}
+            style={{ height: "22px" }}
+          >
+            <span
+              className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+              style={{ left: publicState ? "20px" : "2px" }}
+            />
+          </button>
+        </div>
+
+        {publicState && (
+          <>
+            <div className="flex justify-center mb-4">
+              <img src={qrUrl} alt="QR code" className="rounded-xl border border-[#e5eeff]" width={180} height={180} />
+            </div>
+            <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-[#f0fdfa] border border-[#e5eeff] mb-3">
+              <input
+                readOnly
+                value={shareUrl}
+                className="flex-1 text-xs bg-transparent outline-none text-[#3d4947]"
+              />
+              <button
+                onClick={handleCopy}
+                className="text-xs font-semibold text-teal-700 flex-shrink-0"
+              >
+                {copied ? "Tersalin!" : "Salin"}
+              </button>
+            </div>
+          </>
+        )}
+
+        <button
+          onClick={onClose}
+          className="w-full py-2 rounded-lg text-xs font-semibold text-[#6d7a77] hover:bg-[#f0fdfa] transition-colors"
+        >
+          Tutup
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }: Props) {
   const [tab, setTab] = useState<"bias" | "consistency">("bias");
   const [exporting, setExporting] = useState(false);
@@ -186,6 +298,7 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
   const [rewriteData, setRewriteData] = useState<{ revisedText: string; changeCount: number } | null>(
     null
   );
+  const [showShare, setShowShare] = useState(false);
   const { biasResult, consistencyResult, integrityScore, documentText } = scan;
 
   const biases = biasResult?.biases ?? [];
@@ -229,7 +342,12 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
     <div className="flex flex-col h-full">
       {/* Integrity Score + Export */}
       {integrityScore !== null && (
-        <IntegrityGauge score={integrityScore} onExport={handleExport} exporting={exporting} />
+        <IntegrityGauge
+          score={integrityScore}
+          onExport={handleExport}
+          exporting={exporting}
+          onShare={() => setShowShare(true)}
+        />
       )}
 
       {/* Rewrite CTA */}
@@ -246,7 +364,7 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
                 Membuat dokumen revisi...
               </>
             ) : (
-              <>Generate Dokumen Revisi</>
+              <>✨ Generate Dokumen Revisi</>
             )}
           </button>
           {rewriteError && (
@@ -441,6 +559,17 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
           revisedText={rewriteData.revisedText}
           changeCount={rewriteData.changeCount}
           onClose={() => setRewriteData(null)}
+        />
+      )}
+
+      {showShare && (
+        <ShareModal
+          scanId={scan.id}
+          isPublic={false}
+          onClose={() => setShowShare(false)}
+          onToggle={async (v) => {
+            await setScanPublic(scan.id, v);
+          }}
         />
       )}
     </div>

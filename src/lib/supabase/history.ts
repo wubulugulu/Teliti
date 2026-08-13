@@ -31,6 +31,7 @@ export async function loadScans(): Promise<ScanRecord[]> {
   const { data, error } = await supabase
     .from('scan_history')
     .select('*')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
 
@@ -58,4 +59,22 @@ export async function deleteScan(id: string) {
     .eq('id', id)
 
   if (error) console.error('Delete scan error:', error)
+}
+
+/**
+ * Nyalain/matiin status publik sebuah scan. Dipanggil dari client (browser),
+ * hanya bisa berhasil kalau row itu milik user yang login (RLS: user_id = auth.uid()).
+ */
+export async function setScanPublic(id: string, isPublic: boolean) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('scan_history')
+    .update({ is_public: isPublic })
+    .eq('id', id)
+
+  if (error) {
+    console.error('Set scan public error:', error)
+    return false
+  }
+  return true
 }

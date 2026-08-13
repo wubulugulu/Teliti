@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 import type { BiasItem, AnalysisResult, ScanRecord } from "@/types";
 import {
   FileText,
@@ -14,10 +17,108 @@ import {
   GraduationCap,
   ScrollText,
   ChevronDown,
+  LogOut,
 } from "lucide-react";
+
+const NAV_ITEMS = [
+  { id: "fitur", label: "Fitur" },
+  { id: "cara-kerja", label: "Cara Kerja" },
+  { id: "faq", label: "FAQ" },
+];
 
 export default function LandingPage() {
   const router = useRouter();
+  const [activeSection, setActiveSection] = useState("fitur");
+  const navRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const navContainerRef = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, opacity: 0 });
+  const [user, setUser] = useState<User | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Cek status login
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // Tutup dropdown user kalau klik di luar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    setUserMenuOpen(false);
+    router.push("/");
+  };
+
+  const handleCtaClick = () => {
+    router.push(user ? "/analyze" : "/login");
+  };
+
+  const displayName =
+    user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "User";
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+  const initial = displayName.charAt(0).toUpperCase();
+
+  // Scroll spy: pantau section mana yang lagi kelihatan, update state activeSection
+  useEffect(() => {
+    const sections = NAV_ITEMS.map((n) => document.getElementById(n.id)).filter(
+      (el): el is HTMLElement => !!el
+    );
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { rootMargin: "-40% 0px -50% 0px", threshold: 0 }
+    );
+
+    sections.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  // Update posisi garis bawah tiap activeSection berubah
+  useEffect(() => {
+    const el = navRefs.current[activeSection];
+    const container = navContainerRef.current;
+    if (el && container) {
+      const elRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      setIndicator({
+        left: elRect.left - containerRect.left,
+        width: elRect.width,
+        opacity: 1,
+      });
+    }
+  }, [activeSection]);
+
+  const scrollToSection = (id: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (el) {
+      const y = el.getBoundingClientRect().top + window.scrollY - 90;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+  };
 
   return (
     <div className="bg-[#f0fdfa] text-[#0b1c30] font-sans antialiased min-h-screen flex flex-col relative overflow-x-hidden">
@@ -31,28 +132,93 @@ export default function LandingPage() {
 
       {/* Navbar */}
       <header className="fixed top-0 w-full z-50 bg-white/60 backdrop-blur-md border-b border-white/30">
-        <nav className="flex justify-between items-center h-20 max-w-[1120px] mx-auto px-6">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white font-bold text-sm">T</div>
-            <span className="font-bold text-xl tracking-tight text-[#0b1c30]">Teliti</span>
+        <nav className="flex justify-between items-center h-24 max-w-[1120px] mx-auto px-8">
+          <div className="flex items-center">
+            <img src="/logo.svg" alt="Teliti" className="h-8" />
           </div>
-          <div className="hidden md:flex gap-10">
-            <a href="#fitur" className="text-sm font-semibold text-teal-600 border-b-2 border-teal-600 pb-1">Fitur</a>
-            <a href="#cara-kerja" className="text-sm font-medium text-[#3d4947] hover:text-teal-600 transition-colors">Cara Kerja</a>
-            <a href="#faq" className="text-sm font-medium text-[#3d4947] hover:text-teal-600 transition-colors">FAQ</a>
+
+          <div ref={navContainerRef} className="hidden md:flex gap-10 relative">
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.id}
+                ref={(el) => { navRefs.current[item.id] = el; }}
+                href={`#${item.id}`}
+                onClick={scrollToSection(item.id)}
+                className={`text-sm font-semibold pb-1 transition-colors duration-300 ${
+                  activeSection === item.id
+                    ? "text-teal-600"
+                    : "text-[#3d4947] hover:text-teal-600"
+                }`}
+              >
+                {item.label}
+              </a>
+            ))}
+            {/* Sliding underline indicator */}
+            <span
+              className="absolute -bottom-0 h-0.5 bg-teal-600 rounded-full transition-all duration-300 ease-out"
+              style={{
+                left: indicator.left,
+                width: indicator.width,
+                opacity: indicator.opacity,
+              }}
+            />
           </div>
+
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push("/analyze")}
-              className="hidden md:block text-sm font-semibold bg-teal-600 text-white px-6 py-2.5 rounded-full hover:bg-teal-700 hover:shadow-[0_0_20px_rgba(13,148,136,0.35)] transition-all duration-300 min-h-[44px]"
-            >
-              Coba Gratis
-            </button>
+            {user ? (
+              <div ref={userMenuRef} className="relative hidden md:block">
+                <button
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  className="flex items-center gap-2.5 pl-2 pr-4 py-1.5 rounded-full bg-white/70 border border-teal-100 hover:bg-white hover:shadow-md transition-all duration-300"
+                >
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={displayName} className="w-7 h-7 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">
+                      {initial}
+                    </div>
+                  )}
+                  <span className="text-sm font-semibold text-[#0b1c30] max-w-[120px] truncate">
+                    {displayName}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-[#6d7a77] transition-transform duration-300 ${userMenuOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                <div
+                  className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${
+                    userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+                  }`}
+                >
+                  <button
+                    onClick={() => { setUserMenuOpen(false); router.push("/analyze"); }}
+                    className="w-full text-left px-4 py-3 text-sm font-medium text-[#0b1c30] hover:bg-teal-50 transition-colors"
+                  >
+                    Buka Dashboard
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors border-t border-[#f0fdfa]"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Keluar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleCtaClick}
+                className="hidden md:block text-sm font-semibold bg-teal-600 text-white px-6 py-2.5 rounded-full hover:bg-teal-700 hover:shadow-[0_0_20px_rgba(13,148,136,0.35)] hover:-translate-y-0.5 active:scale-95 transition-all duration-300 min-h-[44px]"
+              >
+                Coba Gratis
+              </button>
+            )}
           </div>
         </nav>
       </header>
 
-      <main className="flex-grow pt-20 relative z-10">
+      <main className="flex-grow pt-24 relative z-10">
 
         {/* Hero */}
         <section className="max-w-[1120px] mx-auto px-6 py-24 md:py-32 grid md:grid-cols-2 gap-16 items-center">
@@ -68,14 +234,15 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={() => router.push("/analyze")}
-                className="bg-teal-600 text-white text-sm font-semibold px-8 py-4 rounded-full hover:bg-teal-700 hover:shadow-[0_8px_30px_rgba(13,148,136,0.3)] hover:-translate-y-0.5 transition-all duration-300 min-h-[44px]"
+                onClick={handleCtaClick}
+                className="bg-teal-600 text-white text-sm font-semibold px-8 py-4 rounded-full hover:bg-teal-700 hover:shadow-[0_8px_30px_rgba(13,148,136,0.3)] hover:-translate-y-0.5 active:scale-95 transition-all duration-300 min-h-[44px]"
               >
                 Mulai Analisis 
               </button>
               <a
                 href="#cara-kerja"
-                className="bg-white/70 border border-teal-200 text-teal-700 text-sm font-semibold px-8 py-4 rounded-full hover:bg-white hover:shadow-md transition-all duration-300 min-h-[44px] text-center"
+                onClick={scrollToSection("cara-kerja")}
+                className="bg-white/70 border border-teal-200 text-teal-700 text-sm font-semibold px-8 py-4 rounded-full hover:bg-white hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-300 min-h-[44px] text-center"
               >
                 Lihat Cara Kerja
               </a>
@@ -102,7 +269,7 @@ export default function LandingPage() {
             <div className="relative bg-white/70 backdrop-blur-sm border border-white/60 rounded-3xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)] w-full max-w-sm">
               {/* Mock result card */}
               <div className="flex items-center gap-3 mb-5">
-                <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">T</div>
+                <img src="/logo-T.svg" alt="Teliti" className="w-8 h-8" />
                 <div>
                   <div className="text-sm font-bold text-[#0b1c30]">Skripsi_Final.pdf</div>
                   <div className="text-xs text-[#6d7a77]">Analisis selesai · 8 detik</div>
@@ -140,7 +307,7 @@ export default function LandingPage() {
         </section>
 
         {/* Cara Kerja */}
-        <section id="cara-kerja" className="py-24 relative">
+        <section id="cara-kerja" className="py-24 relative scroll-mt-24">
           <div className="max-w-[1120px] mx-auto px-6 text-center">
             <h2 className="text-4xl font-bold tracking-tight text-[#0b1c30] mb-4">Cara Kerja Teliti</h2>
             <p className="text-lg text-[#3d4947] max-w-2xl mx-auto mb-16">
@@ -151,7 +318,7 @@ export default function LandingPage() {
               <div className="hidden md:block absolute top-1/3 left-[18%] right-[18%] h-px bg-gradient-to-r from-transparent via-teal-300 to-transparent z-0" />
               {[
                 { step: "1", title: "Unggah Dokumen", desc: "Upload PDF, DOCX, atau tempel teks langsung. Maksimal 10MB.", Icon: FileText },
-                { step: "2", title: "AI Menganalisis", desc: "Gemini & Groq AI bekerja paralel deteksi bias + cek konsistensi sekaligus.", Icon: Bot },
+                { step: "2", title: "AI Menganalisis", desc: "Gemini AI bekerja paralel deteksi bias + cek konsistensi sekaligus.", Icon: Bot },
                 { step: "3", title: "Terima Insight", desc: "Hasil lengkap: score, temuan per kategori, dan saran perbaikan konkret.", Icon: Sparkles },
               ].map((item) => (
                 <div key={item.step} className="relative z-10 bg-white/70 backdrop-blur-sm border border-white/60 p-8 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_32px_rgba(13,148,136,0.12)] hover:-translate-y-1 transition-all duration-300 flex flex-col items-center">
@@ -168,7 +335,7 @@ export default function LandingPage() {
         </section>
 
         {/* Fitur */}
-        <section id="fitur" className="py-20">
+        <section id="fitur" className="py-20 scroll-mt-24">
           <div className="max-w-[1120px] mx-auto px-6">
             <div className="text-center mb-16">
               <h2 className="text-4xl font-bold tracking-tight text-[#0b1c30] mb-4">Dua Fitur, Satu Analisis</h2>
@@ -235,7 +402,7 @@ export default function LandingPage() {
         </section>
 
         {/* FAQ */}
-        <section id="faq" className="py-20">
+        <section id="faq" className="py-20 scroll-mt-24">
           <div className="max-w-[800px] mx-auto px-6">
             <h2 className="text-4xl font-bold tracking-tight text-[#0b1c30] mb-12 text-center">Pertanyaan Umum</h2>
             <div className="space-y-3">
@@ -268,8 +435,8 @@ export default function LandingPage() {
               Analisis bias + konsistensi sekaligus. Gratis, tanpa daftar.
             </p>
             <button
-              onClick={() => router.push("/analyze")}
-              className="bg-teal-600 text-white text-base font-bold px-12 py-5 rounded-full hover:bg-teal-700 hover:shadow-[0_10px_40px_rgba(13,148,136,0.4)] hover:-translate-y-1 transition-all duration-300 min-h-[44px] relative z-10"
+              onClick={handleCtaClick}
+              className="bg-teal-600 text-white text-base font-bold px-12 py-5 rounded-full hover:bg-teal-700 hover:shadow-[0_10px_40px_rgba(13,148,136,0.4)] hover:-translate-y-1 active:scale-95 transition-all duration-300 min-h-[44px] relative z-10"
             >
               Mulai Analisis Sekarang 
             </button>
@@ -280,13 +447,19 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-white/50 backdrop-blur-sm border-t border-white/40 w-full py-12 relative z-10">
         <div className="flex flex-col md:flex-row justify-between items-center max-w-[1120px] mx-auto px-6 gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">T</div>
-            <span className="font-bold text-lg text-[#0b1c30]">Teliti</span>
+          <div className="flex items-center">
+            <img src="/logo.svg" alt="Teliti" className="h-7" />
           </div>
           <div className="flex flex-wrap justify-center gap-8">
-            {["Fitur", "Cara Kerja", "FAQ"].map((l) => (
-              <a key={l} href={`#${l.toLowerCase().replace(" ", "-")}`} className="text-sm text-[#6d7a77] hover:text-teal-600 transition-colors font-medium">{l}</a>
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                onClick={scrollToSection(item.id)}
+                className="text-sm text-[#6d7a77] hover:text-teal-600 transition-colors font-medium"
+              >
+                {item.label}
+              </a>
             ))}
           </div>
           <div className="text-xs text-[#6d7a77] text-center md:text-right">
