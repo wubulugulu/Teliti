@@ -27,7 +27,7 @@ Kembalikan HANYA JSON valid, tanpa markdown, tanpa penjelasan tambahan:
   "changeCount": <jumlah kalimat yang benar-benar diubah>
 }`;
 
-const MAX_DOC_CHARS = 100000;
+const MAX_DOC_CHARS = 20000;
 
 function truncateText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;

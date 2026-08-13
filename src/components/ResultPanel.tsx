@@ -347,6 +347,11 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
       {/* Rewrite CTA */}
       {hasFindings && (
         <div className="px-5 py-3 border-b border-[#e5eeff] flex-shrink-0">
+          {documentText.length > 25000 && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+              Dokumen terlalu panjang ({(documentText.length / 1000).toFixed(0)}k karakter). Hanya 25.000 karakter pertama yang akan direvisi.
+            </p>
+          )}
           <button
             onClick={handleRewrite}
             disabled={rewriting}
@@ -361,6 +366,9 @@ export default function ResultPanel({ scan, activeHighlight, onHighlightSelect }
               <>Generate Dokumen Revisi</>
             )}
           </button>
+          <p className="text-[10px] text-[#6d7a77] text-center mt-1.5">
+            Maks. 25.000 karakter · {documentText.length.toLocaleString("id-ID")} karakter dokumen ini
+          </p>
           {rewriteError && (
             <p className="text-xs text-red-500 mt-2">{rewriteError}</p>
           )}
