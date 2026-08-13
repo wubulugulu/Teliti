@@ -1,5 +1,5 @@
 import type { ScanRecord } from "@/types";
-
+import { scoreLabel } from "@/lib/scoreLabel";
 /**
  * Rasterize file SVG (mis. /logo-T.svg) jadi data URL PNG, karena jsPDF
  * gak bisa render SVG secara native — cuma nerima PNG/JPEG lewat addImage.
@@ -101,14 +101,7 @@ export async function exportToPDF(scan: ScanRecord): Promise<void> {
   function scoreColor(s: number): [number, number, number] {
     return s >= 75 ? GREEN : s >= 50 ? AMBER : RED;
   }
-  function scoreLabel(s: number): string {
-    if (s >= 90) return "Sempurna";
-    if (s >= 75) return "Baik";
-    if (s >= 60) return "Cukup";
-    if (s >= 40) return "Kurang";
-    if (s >= 20) return "Buruk";
-    return "Sangat Buruk";
-  }
+ 
   function sevCfg(sev: string) {
     if (sev === "high") return { color: RED, bg: RED_LIGHT, label: "Tinggi", border: RED };
     if (sev === "medium") return { color: AMBER, bg: AMBER_LIGHT, label: "Sedang", border: AMBER };

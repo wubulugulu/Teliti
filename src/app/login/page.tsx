@@ -116,9 +116,8 @@ function LoginContent() {
   return (
     <div className="min-h-screen bg-[#f0fdfa] flex flex-col">
       <nav className="w-full px-6 py-5 md:px-12">
-        <Link href="/" className="inline-flex items-center gap-2 text-[#0b1c30]">
-          <ScanLine className="text-teal-600" strokeWidth={1.75} size={26} />
-          <span className="text-xl font-bold">Teliti</span>
+        <Link href="/" className="inline-flex items-center">
+          <img src="/logo.svg" alt="Teliti" className="h-8" />
         </Link>
       </nav>
 

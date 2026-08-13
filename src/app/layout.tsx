@@ -9,7 +9,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "BiasDetect - Analisis Dokumen AI",
+  title: "Teliti Deteksi Bias & Cek Konsistensi Dokumen Penelitian",
   description: "Deteksi bias tersembunyi dan cek konsistensi dokumen penelitian dengan AI.",
 };
 

@@ -1,3 +1,8 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ['pdf-parse', 'pdfjs-dist', 'canvas', 'tesseract.js'],
+  },
+};
+
 export default nextConfig;

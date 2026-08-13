@@ -1,5 +1,6 @@
 import { loadPublicScan } from "@/lib/supabase/history-server";
 import { notFound } from "next/navigation";
+import { scoreLabel } from "@/lib/scoreLabel";
 
 function scoreColor(score: number) {
   if (score >= 75) return "#16A34A";
@@ -7,14 +8,6 @@ function scoreColor(score: number) {
   return "#DC2626";
 }
 
-function scoreLabel(score: number) {
-  if (score >= 90) return "Sempurna";
-  if (score >= 75) return "Baik";
-  if (score >= 60) return "Cukup";
-  if (score >= 40) return "Kurang";
-  if (score >= 20) return "Buruk";
-  return "Sangat Buruk";
-}
 
 const sevColor = {
   high: { text: "#DC2626", bg: "#FEE2E2", label: "Tinggi" },

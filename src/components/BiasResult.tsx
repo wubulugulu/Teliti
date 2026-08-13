@@ -1,6 +1,6 @@
 "use client";
 
-import { AnalysisResult, BiasItem } from "@/app/page";
+import { AnalysisResult, BiasItem } from "@/types";
 
 type Props = {
   result: AnalysisResult;
@@ -20,7 +20,7 @@ const scoreColor = (score: number) => {
   return "text-red-400";
 };
 
-const scoreLabel = (score: number) => {
+const biasScoreLabel = (score: number) => {
   if (score <= 20) return "Sangat Bersih";
   if (score <= 40) return "Cukup Bersih";
   if (score <= 60) return "Perlu Perhatian";
@@ -51,7 +51,7 @@ export default function BiasResult({ result, originalText, onReset }: Props) {
               <span className="text-2xl text-white/20">/100</span>
             </div>
             <p className={`text-sm mt-1 font-medium ${scoreColor(score)}`}>
-              {scoreLabel(score)}
+              {biasScoreLabel(score)}
             </p>
           </div>
           <div className="flex-1 max-w-xs">

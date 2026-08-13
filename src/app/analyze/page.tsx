@@ -1,7 +1,9 @@
 "use client";
 import type { ScanRecord } from "@/types";
+import type { User } from "@supabase/supabase-js";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown, LogOut } from "lucide-react";
 import ResultPanel from "@/components/ResultPanel";
 import DocumentViewer from "@/components/DocumentViewer";
 import { saveScan, loadScans } from "@/lib/supabase/history";
@@ -22,6 +24,11 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Profile / auth state
+  const [user, setUser] = useState<User | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
   // Load history dari Supabase saat mount
   useEffect(() => {
     loadScans().then((scans) => {
@@ -33,11 +40,75 @@ export default function Home() {
     });
   }, []);
 
+  // Cek status login (sama kayak landing page)
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // Tutup dropdown user kalau klik di luar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     location.href = "/login";
   };
+
+  const displayName =
+    user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "User";
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+  const initial = displayName.charAt(0).toUpperCase();
+
+  const ProfileMenu = () => (
+    <div ref={userMenuRef} className="relative">
+      <button
+        onClick={() => setUserMenuOpen((v) => !v)}
+        className="flex items-center gap-2.5 pl-2 pr-4 py-1.5 rounded-full bg-white/70 border border-teal-100 hover:bg-white hover:shadow-md transition-all duration-300"
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={displayName} className="w-7 h-7 rounded-full object-cover" />
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-teal-600 to-teal-400 flex items-center justify-center text-white text-xs font-bold">
+            {initial}
+          </div>
+        )}
+        <span className="text-sm font-semibold text-[#0b1c30] max-w-[120px] truncate">
+          {displayName}
+        </span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-[#6d7a77] transition-transform duration-300 ${userMenuOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      <div
+        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${
+          userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        }`}
+      >
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2 text-left px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Keluar
+        </button>
+      </div>
+    </div>
+  );
 
   const processFile = async (f: File) => {
     setFileLoading(true);
@@ -145,12 +216,7 @@ export default function Home() {
             <img src="/logo.svg" alt="Teliti" className="h-8" />
             
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs px-4 py-1.5 rounded-full bg-red-500 text-white font-semibold hover:bg-red-600 hover:shadow-[0_4px_14px_rgba(239,68,68,0.35)] transition-all"
-          >
-            Keluar
-          </button>
+          <ProfileMenu />
         </header>
 
         <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-16">
@@ -309,12 +375,7 @@ export default function Home() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleLogout}
-            className="text-xs px-4 py-1.5 rounded-full bg-red-500 text-white font-semibold hover:bg-red-600 hover:shadow-[0_4px_14px_rgba(239,68,68,0.35)] transition-all"
-          >
-            Keluar
-          </button>
+          <ProfileMenu />
         </div>
       </header>
 

@@ -29,14 +29,7 @@ interface IntegrityCheckResponse {
   documentText: string;
 }
 
-function scoreLabel(s: number): string {
-  if (s >= 90) return "Sempurna";
-  if (s >= 75) return "Baik";
-  if (s >= 60) return "Cukup";
-  if (s >= 40) return "Kurang";
-  if (s >= 20) return "Buruk";
-  return "Sangat Buruk";
-}
+
 
 /**
  * Ambil pesan+status paling informatif dari dua kemungkinan error, untuk
@@ -176,4 +169,3 @@ export async function POST(req: NextRequest) {
 }
 
 export type { IntegrityCheckResponse, IntegrityBreakdown };
-export { scoreLabel };

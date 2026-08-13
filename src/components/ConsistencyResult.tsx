@@ -1,4 +1,5 @@
 "use client";
+import { scoreLabel } from "@/lib/scoreLabel";
 
 type Section = { name: string; summary: string };
 type Issue = {
@@ -29,12 +30,6 @@ const sevConfig = {
 const scoreColor = (s: number) =>
   s >= 75 ? "text-green-400" : s >= 60 ? "text-yellow-400" : s >= 40 ? "text-orange-400" : "text-red-400";
 
-const scoreLabel = (s: number) =>
-  s >= 90 ? "Sempurna" :
-    s >= 75 ? "Baik" :
-      s >= 60 ? "Cukup" :
-        s >= 40 ? "Kurang" :
-          s >= 20 ? "Buruk" : "Sangat Buruk";
 
 const categoryColors: Record<string, string> = {
   "Konsistensi Logis": "text-violet-400 bg-violet-400/10 border-violet-400/20",
