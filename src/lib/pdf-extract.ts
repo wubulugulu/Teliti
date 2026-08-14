@@ -4,7 +4,7 @@ import { createCanvas, Canvas, CanvasRenderingContext2D as NodeCanvasContext2D }
 import path from "path";
 import { pathToFileURL } from "url";
 
-const MAX_CHECK_PAGES = 30;
+const MAX_CHECK_PAGES = 60;
 const MAX_IMAGES_TO_SEND = 10;
 const TARGET_MAX_IMAGE_DIMENSION = 1000;
 
@@ -223,7 +223,11 @@ export async function extractPdf(buffer: Buffer): Promise<PdfExtractResult> {
 
   let pageImages: InlineImage[] = [];
   try {
-    pageImages = await renderPagesToImages(buffer, uniquePageNumbers);
+    const renderPromise = renderPagesToImages(buffer, uniquePageNumbers);
+    const timeoutPromise = new Promise<InlineImage[]>((_, reject) =>
+      setTimeout(() => reject(new Error("Render timeout")), 5000)
+    );
+    pageImages = await Promise.race([renderPromise, timeoutPromise]);
   } catch (renderErr) {
     console.warn("Render halaman ke gambar gagal, lanjut tanpa gambar:", renderErr);
   }
