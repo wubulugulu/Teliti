@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       consistencyResult,
       figures: figures.slice(0, 20), // batasi figures
       warnings,
-      documentText: text.slice(0, 105000), // turunin dari 50k ke 25k
+      documentText: text,
     };
 
     return NextResponse.json(response);
