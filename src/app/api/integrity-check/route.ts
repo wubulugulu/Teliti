@@ -95,9 +95,11 @@ export async function POST(req: NextRequest) {
     // kena rate limit Gemini), yang satunya tetap bisa ditampilkan alih-alih
     // membuat seluruh request gagal.
     const [biasSettled, consistencySettled] = await Promise.allSettled([
+
       analyzeBias(text),
       checkConsistency(text, images),
     ]);
+    images = []; // 
 
     const biasResult = biasSettled.status === "fulfilled" ? biasSettled.value : null;
     const consistencyResult =
@@ -152,9 +154,9 @@ export async function POST(req: NextRequest) {
       breakdown: { biasScore, biasHealthScore, consistencyScore, weights: WEIGHTS },
       biasResult,
       consistencyResult,
-      figures,
+      figures: figures.slice(0, 20), // batasi figures
       warnings,
-      documentText: text.slice(0, 50000),
+      documentText: text.slice(0, 25000), // turunin dari 50k ke 25k
     };
 
     return NextResponse.json(response);
