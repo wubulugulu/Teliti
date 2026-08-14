@@ -154,8 +154,7 @@ export async function POST(req: NextRequest) {
       consistencyResult,
       figures,
       warnings,
-      documentText: text,
-
+      documentText: text.slice(0, 50000),
     };
 
     return NextResponse.json(response);
