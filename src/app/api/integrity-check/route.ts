@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
 
+
       if (!file) {
         return NextResponse.json({ error: "File tidak ditemukan" }, { status: 400 });
       }
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
       consistencyResult,
       figures: figures.slice(0, 20), // batasi figures
       warnings,
-      documentText: text.slice(0, 25000), // turunin dari 50k ke 25k
+      documentText: text.slice(0, 105000), // turunin dari 50k ke 25k
     };
 
     return NextResponse.json(response);
