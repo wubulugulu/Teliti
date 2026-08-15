@@ -95,9 +95,8 @@ export default function Home() {
       </button>
 
       <div
-        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${
-          userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
-        }`}
+        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+          }`}
       >
         <button
           onClick={handleLogout}
@@ -168,8 +167,8 @@ export default function Home() {
         fileName: file?.name || "Teks langsung",
         timestamp: new Date(),
         integrityScore: data.integrityScore ?? null,
-        biasResult: data.biasResult ?? null,
-        consistencyResult: data.consistencyResult ?? null,
+        biasResult: data.bias ?? null,
+        consistencyResult: data.consistency ?? null,
         documentText: docText,
       };
 
@@ -214,7 +213,7 @@ export default function Home() {
             className="flex items-center cursor-pointer"
           >
             <img src="/logo.svg" alt="Teliti" className="h-8" />
-            
+
           </div>
           <ProfileMenu />
         </header>
@@ -424,7 +423,7 @@ export default function Home() {
               ))}
             </div>
 
-            
+
           </aside>
         )}
 
