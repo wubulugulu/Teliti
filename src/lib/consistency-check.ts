@@ -1,4 +1,4 @@
-import { ai, GEMINI_MODEL, GeminiCallError, toGeminiCallError } from "./gemini-client";
+import { GEMINI_MODEL, GeminiCallError, generateWithRetry } from "./gemini-client";
 import type { ConsistencyResult } from "@/components/ConsistencyResult";
 import type { InlineImage } from "./pdf-extract";
 
@@ -123,6 +123,10 @@ function truncateText(text: string, maxChars: number): string {
  * Jalankan cek konsistensi atas sebuah dokumen (teks + opsional gambar
  * halaman untuk verifikasi figure/chart via Gemini Vision). Melempar
  * GeminiCallError kalau gagal — sama seperti analyzeBias.
+ *
+ * Retry otomatis (exponential backoff) untuk error 503 (model overload)
+ * ditangani di dalam generateWithRetry, sebelum error dikonversi jadi
+ * GeminiCallError.
  */
 export async function checkConsistency(
   text: string,
@@ -147,9 +151,8 @@ export async function checkConsistency(
     parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
   }
 
-  let response;
-  try {
-    response = await ai.models.generateContent({
+  const response = await generateWithRetry(
+    {
       model: GEMINI_MODEL,
       contents: [{ role: "user", parts }],
       config: {
@@ -157,10 +160,9 @@ export async function checkConsistency(
         temperature: 0.1,
         responseMimeType: "application/json",
       },
-    });
-  } catch (e) {
-    throw toGeminiCallError(e, "consistency");
-  }
+    },
+    "consistency"
+  );
 
   const candidate = response.candidates?.[0];
   if (!candidate) {

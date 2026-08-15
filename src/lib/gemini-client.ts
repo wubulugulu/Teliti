@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 export const GEMINI_MODEL = "gemini-3.6-flash";
@@ -70,6 +69,52 @@ export function toGeminiCallError(e: unknown, context: "bias" | "consistency"): 
       e
     );
   }
+  if (status === 503) {
+    return new GeminiCallError(
+      503,
+      "Model Gemini sedang overload. Coba lagi dalam beberapa saat.",
+      e
+    );
+  }
 
   return new GeminiCallError(500, `Gagal menganalisis ${subject}. Coba lagi.`, e);
+}
+
+/**
+ * Wrap ai.models.generateContent dengan retry exponential backoff, KHUSUS
+ * untuk error 503 (model overload). Error lain (400/403/404/429) langsung
+ * dilempar tanpa retry karena retry tidak akan membantu.
+ *
+ * PENTING: retry ini harus dipanggil SEBELUM error dikonversi ke
+ * GeminiCallError oleh toGeminiCallError — begitu dikonversi, status asli
+ * (503) sudah hilang dan route.ts tidak akan bisa membedakan overload
+ * sementara vs error permanen.
+ *
+ * Pakai di bias-analysis.ts / consistency-check.ts sebagai pengganti
+ * pemanggilan ai.models.generateContent langsung.
+ */
+export async function generateWithRetry(
+  payload: Parameters<typeof ai.models.generateContent>[0],
+  context: "bias" | "consistency",
+  retries = 2
+): Promise<Awaited<ReturnType<typeof ai.models.generateContent>>> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await ai.models.generateContent(payload);
+    } catch (e) {
+      const status = (e as RawGeminiApiError)?.status;
+      const isOverload = status === 503;
+      const isLastAttempt = attempt === retries;
+
+      if (!isOverload || isLastAttempt) {
+        throw toGeminiCallError(e, context);
+      }
+
+      const delayMs = 2000 * (attempt + 1);
+      console.warn(`[${context}] Gemini 503, retry ke-${attempt + 1} setelah ${delayMs}ms`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  // unreachable — loop selalu return atau throw
+  throw new GeminiCallError(503, "Gagal setelah beberapa percobaan.");
 }

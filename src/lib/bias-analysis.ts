@@ -1,5 +1,4 @@
-
-import { ai, GEMINI_MODEL, GeminiCallError, toGeminiCallError } from "./gemini-client";
+import { GEMINI_MODEL, GeminiCallError, generateWithRetry } from "./gemini-client";
 import type { BiasItem } from "@/types";
 export interface AnalysisResult {
   score: number;
@@ -89,6 +88,10 @@ function truncateText(text: string, maxChars: number): string {
  * Jalankan deteksi bias atas sebuah teks. Melempar GeminiCallError (dengan
  * `.status` & `.userMessage` siap pakai) kalau gagal di titik manapun —
  * caller (route.ts atau integrity-check) tinggal tangkap dan map ke response.
+ *
+ * Retry otomatis (exponential backoff) untuk error 503 (model overload)
+ * ditangani di dalam generateWithRetry, sebelum error dikonversi jadi
+ * GeminiCallError.
  */
 export async function analyzeBias(text: string): Promise<AnalysisResult> {
   if (!text || typeof text !== "string" || text.trim().length < 10) {
@@ -97,21 +100,18 @@ export async function analyzeBias(text: string): Promise<AnalysisResult> {
 
   const safeText = truncateText(text.trim(), MAX_DOC_CHARS);
 
-  let response;
-  try {
-    response = await ai.models.generateContent({
+  const response = await generateWithRetry(
+    {
       model: GEMINI_MODEL,
       contents: `Teks yang dianalisis:\n"""\n${safeText}\n"""`,
       config: {
         systemInstruction: SYSTEM_PROMPT,
         temperature: 0.3,
-        responseMimeType: "application/json", 
-
+        responseMimeType: "application/json",
       },
-    });
-  } catch (e) {
-    throw toGeminiCallError(e, "bias");
-  }
+    },
+    "bias"
+  );
 
   const candidate = response.candidates?.[0];
   if (!candidate) {

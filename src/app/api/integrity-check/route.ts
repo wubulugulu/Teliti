@@ -1,173 +1,197 @@
+// src/app/api/integrity-check/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeBias, type AnalysisResult } from "@/lib/bias-analysis";
+import { analyzeBias } from "@/lib/bias-analysis";
 import { checkConsistency } from "@/lib/consistency-check";
+import { extractPdf, PdfExtractError } from "@/lib/pdf-extract";
+import type { InlineImage } from "@/lib/pdf-extract";
 import { GeminiCallError } from "@/lib/gemini-client";
-import { extractPdf, PdfExtractError, type FigureReference, type InlineImage } from "@/lib/pdf-extract";
-import type { ConsistencyResult } from "@/components/ConsistencyResult";
-export const maxDuration = 60;
-// Bobot Integrity Score. Consistency dibobot sama besar dengan bias karena
-// keduanya sama-sama merepresentasikan "integritas" dokumen dari sisi
-// berbeda (kejujuran metodologis vs netralitas penyajian). Diletakkan di
-// satu tempat biar gampang di-tweak tanpa nyari-nyari di tengah logic.
-const WEIGHTS = { bias: 0.5, consistency: 0.5 } as const;
 
-interface IntegrityBreakdown {
-  biasScore: number | null; // 0-100, makin tinggi makin banyak bias (raw dari analyzeBias)
-  biasHealthScore: number | null; // 100 - biasScore, makin tinggi makin bersih
-  consistencyScore: number | null; // 0-100, makin tinggi makin konsisten
-  weights: typeof WEIGHTS;
+export const maxDuration = 60; // Vercel Hobby plan cap
+
+const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+const PDF_EXTRACTION_TIMEOUT_MS = 40_000; // sisakan ~20s untuk Gemini call
+const MAX_DOC_CHARS = 150_000;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout setelah ${ms}ms`)), ms)
+    ),
+  ]);
 }
-
-interface IntegrityCheckResponse {
-  integrityScore: number | null;
-  breakdown: IntegrityBreakdown;
-  biasResult: AnalysisResult | null;
-  consistencyResult: ConsistencyResult | null;
-  figures: FigureReference[];
-  warnings: string[];
-  documentText: string;
-}
-
-
 
 /**
- * Ambil pesan+status paling informatif dari dua kemungkinan error, untuk
- * dipakai sebagai status HTTP response kalau KEDUA analisis gagal total.
- * Rate limit (429) diprioritaskan karena paling actionable buat user
- * ("tunggu sebentar") dibanding error generik.
+ * Kurangi jumlah halaman yang di-scan kalau file besar.
+ * Dokumen besar biasanya juga berat per halaman (banyak gambar/vector),
+ * jadi scan penuh 60 halaman bisa jauh lebih lambat dari perkiraan.
  */
-function pickWorstError(a: unknown, b: unknown): { status: number; message: string } {
-  const errs = [a, b].filter((e): e is GeminiCallError => e instanceof GeminiCallError);
-  const rateLimited = errs.find((e) => e.status === 429);
-  if (rateLimited) return { status: 429, message: rateLimited.userMessage };
-  if (errs[0]) return { status: errs[0].status, message: errs[0].userMessage };
-  return { status: 500, message: "Gagal menganalisis dokumen." };
+function getAdaptiveMaxPages(fileSizeBytes: number): number {
+  const sizeMB = fileSizeBytes / (1024 * 1024);
+  if (sizeMB > 3) return 25;
+  if (sizeMB > 1.5) return 40;
+  return 60;
 }
 
+// ---------------------------------------------------------------------------
+// Route Handler
+// ---------------------------------------------------------------------------
+//
+// NOTE: retry-on-503 untuk Gemini SUDAH ditangani di dalam
+// generateWithRetry (gemini-client.ts), yang dipanggil oleh analyzeBias
+// dan checkConsistency. Jangan wrap pemanggilannya dengan retry lagi di
+// sini — kalau overload menetap, itu jadi retry bersarang (retries+1)^2
+// percobaan nyata ke Gemini, yang bisa menghabiskan sisa budget waktu
+// sebelum maxDuration (60s) tercapai dan malah bikin request gagal total
+// alih-alih retry membantu.
+
 export async function POST(req: NextRequest) {
+  console.time("total-request");
+
   try {
-    const contentType = req.headers.get("content-type") || "";
-    let text = "";
-    let images: InlineImage[] = [];
-    let figures: FigureReference[] = [];
-    const warnings: string[] = [];
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const manualText = formData.get("text") as string | null;
 
-    if (contentType.includes("multipart/form-data")) {
-      // Path PDF: ekstrak teks + gambar SEKALI, dipakai bareng oleh kedua analisis.
-      const formData = await req.formData();
-      const file = formData.get("file") as File | null;
+    let documentText: string;
+    let pageImages: InlineImage[] = [];
 
-
-      if (!file) {
-        return NextResponse.json({ error: "File tidak ditemukan" }, { status: 400 });
+    if (file) {
+      // --- 1. Validasi ukuran file SEBELUM proses apapun ---
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        console.timeEnd("total-request");
+        return NextResponse.json(
+          { error: "Ukuran file maksimal 4MB." },
+          { status: 413 }
+        );
       }
 
       const buffer = Buffer.from(await file.arrayBuffer());
+      const maxPages = getAdaptiveMaxPages(file.size);
 
+      // --- 2. Ekstraksi PDF dengan timeout guard ---
+      console.time("pdf-extract");
+      let extracted;
       try {
-        const extracted = await extractPdf(buffer);
-        text = extracted.text;
-        images = extracted.pageImages;
-        figures = extracted.figures;
-      } catch (e) {
-        if (e instanceof PdfExtractError) {
-          return NextResponse.json({ error: e.message }, { status: e.status });
-        }
-        throw e;
-      }
-    } else {
-      // Path teks langsung / hasil ekstrak client-side (docx, txt).
-      const body = await req.json();
-      text = typeof body?.text === "string" ? body.text : "";
-      images = Array.isArray(body?.images) ? body.images : [];
-    }
+        extracted = await withTimeout(
+          extractPdf(buffer, maxPages),
+          PDF_EXTRACTION_TIMEOUT_MS,
+          "Ekstraksi PDF"
+        );
+      } catch (err) {
+        console.timeEnd("pdf-extract");
+        console.timeEnd("total-request");
+        console.error("PDF extraction gagal atau timeout:", err);
 
-    if (!text || text.trim().length < 50) {
+        // PdfExtractError punya status yang sudah dipetakan (422 = teks
+        // kosong / PDF tidak terbaca). Error lain di titik ini adalah
+        // timeout dari withTimeout, atau kegagalan tak terduga -> 408.
+        if (err instanceof PdfExtractError) {
+          return NextResponse.json({ error: err.message }, { status: err.status });
+        }
+
+        return NextResponse.json(
+          {
+            error:
+              "Dokumen terlalu besar/kompleks untuk diproses dalam batas waktu. " +
+              "Coba pecah dokumen jadi bagian lebih kecil, atau kurangi jumlah halaman.",
+          },
+          { status: 408 }
+        );
+      }
+      console.timeEnd("pdf-extract");
+
+      documentText = extracted.text;
+      pageImages = extracted.pageImages;
+    } else if (manualText) {
+      documentText = manualText;
+      // pageImages tetap [] — input teks manual, gak ada PDF buat di-render
+    } else {
+      console.timeEnd("total-request");
       return NextResponse.json(
-        { error: "Dokumen terlalu pendek untuk dianalisis (minimal ~50 karakter)." },
+        { error: "Tidak ada file atau teks yang dikirim." },
         { status: 400 }
       );
     }
 
-    // Jalankan dua analisis PARALEL — bukan berurutan — biar total waktu
-    // tunggu ≈ analisis paling lambat, bukan jumlah keduanya. Pakai
-    // allSettled (bukan Promise.all) supaya kalau salah satu gagal (mis.
-    // kena rate limit Gemini), yang satunya tetap bisa ditampilkan alih-alih
-    // membuat seluruh request gagal.
-    const [biasSettled, consistencySettled] = await Promise.allSettled([
+    // --- 3. Truncate biar aman dari limit token/TPM Gemini ---
+    const truncatedText = documentText.slice(0, MAX_DOC_CHARS);
 
-      analyzeBias(text),
-      checkConsistency(text, images),
+    // --- 4. Jalankan bias + consistency check paralel. ---
+    // Retry sudah di-handle di dalam analyzeBias/checkConsistency
+    // (lewat generateWithRetry) -- lihat catatan di atas.
+    // checkConsistency dapat pageImages buat verifikasi visual figure via
+    // Gemini Vision; analyzeBias tidak butuh gambar.
+    console.time("gemini-parallel");
+    const [biasResult, consistencyResult] = await Promise.allSettled([
+      analyzeBias(truncatedText),
+      checkConsistency(truncatedText, pageImages),
     ]);
-    images = []; // 
+    console.timeEnd("gemini-parallel");
 
-    const biasResult = biasSettled.status === "fulfilled" ? biasSettled.value : null;
-    const consistencyResult =
-      consistencySettled.status === "fulfilled" ? consistencySettled.value : null;
+    // --- 5. Hitung Integrity Score, toleran kalau salah satu gagal ---
+    const biasScore =
+      biasResult.status === "fulfilled" ? biasResult.value.score : null;
+    const consistencyScore =
+      consistencyResult.status === "fulfilled"
+        ? consistencyResult.value.consistency_score
+        : null;
 
-    if (biasSettled.status === "rejected") {
-      const err = biasSettled.reason;
-      const msg = err instanceof GeminiCallError ? err.userMessage : "Gagal menganalisis bias.";
-      warnings.push(`Analisis bias gagal: ${msg}`);
-      console.error("integrity-check: analyzeBias gagal:", err);
-    }
-    if (consistencySettled.status === "rejected") {
-      const err = consistencySettled.reason;
-      const msg =
-        err instanceof GeminiCallError ? err.userMessage : "Gagal menganalisis konsistensi.";
-      warnings.push(`Analisis konsistensi gagal: ${msg}`);
-      console.error("integrity-check: checkConsistency gagal:", err);
-    }
-
-    // Kalau DUA-duanya gagal, gak ada apapun buat ditampilkan — return error
-    // sesungguhnya (bukan 200 kosong) dengan status paling informatif.
-    if (!biasResult && !consistencyResult) {
-      const { status, message } = pickWorstError(
-        (biasSettled as PromiseRejectedResult).reason,
-        (consistencySettled as PromiseRejectedResult).reason
+    if (biasScore === null && consistencyScore === null) {
+      console.timeEnd("total-request");
+      return NextResponse.json(
+        { error: "Analisis gagal total. Coba lagi beberapa saat." },
+        { status: 502 }
       );
-      return NextResponse.json({ error: message, warnings }, { status });
     }
 
-    // Hitung Integrity Score. Kalau salah satu analisis gagal, score dihitung
-    // dari yang berhasil saja (bobot penuh 1.0), bukan dianggap 0 — supaya
-    // satu kegagalan gak menjatuhkan skor secara gak adil.
-    const biasScore = biasResult ? biasResult.score : null;
-    const biasHealthScore = biasScore !== null ? 100 - biasScore : null;
-    const consistencyScore = consistencyResult ? consistencyResult.consistency_score : null;
-
-    let integrityScore: number | null = null;
-    if (biasHealthScore !== null && consistencyScore !== null) {
-      integrityScore = Math.round(
-        biasHealthScore * WEIGHTS.bias + consistencyScore * WEIGHTS.consistency
-      );
-    } else if (biasHealthScore !== null) {
-      integrityScore = Math.round(biasHealthScore);
-      warnings.push("Integrity Score dihitung hanya dari analisis bias (konsistensi tidak tersedia).");
-    } else if (consistencyScore !== null) {
-      integrityScore = Math.round(consistencyScore);
-      warnings.push("Integrity Score dihitung hanya dari analisis konsistensi (bias tidak tersedia).");
+    let integrityScore: number;
+    if (biasScore !== null && consistencyScore !== null) {
+      integrityScore = Math.round((100 - biasScore) * 0.5 + consistencyScore * 0.5);
+    } else if (biasScore !== null) {
+      integrityScore = Math.round(100 - biasScore);
+    } else {
+      integrityScore = Math.round(consistencyScore as number);
     }
 
-    const response: IntegrityCheckResponse = {
+    console.timeEnd("total-request");
+
+    return NextResponse.json({
       integrityScore,
-      breakdown: { biasScore, biasHealthScore, consistencyScore, weights: WEIGHTS },
-      biasResult,
-      consistencyResult,
-      figures: figures.slice(0, 20), // batasi figures
-      warnings,
-      documentText: text,
-    };
+      bias:
+        biasResult.status === "fulfilled"
+          ? biasResult.value
+          : { error: "Bias analysis gagal", detail: String(biasResult.reason) },
+      consistency:
+        consistencyResult.status === "fulfilled"
+          ? consistencyResult.value
+          : {
+              error: "Consistency check gagal",
+              detail: String(consistencyResult.reason),
+            },
+      // batasi payload balik ke client biar ga kena 413 lagi
+      documentText: truncatedText.slice(0, 100_000),
+    });
+  } catch (err) {
+    console.timeEnd("total-request");
+    console.error("integrity-check fatal error:", err);
 
-    return NextResponse.json(response);
-  } catch (e: unknown) {
-    console.error("integrity-check error:", e);
+    // analyzeBias/checkConsistency sudah mengonversi error mereka sendiri
+    // jadi GeminiCallError sebelum dilempar (lihat gemini-client.ts).
+    // Error lain di titik ini (formData parsing, JSON serialization, dll)
+    // bukan tanggung jawab Gemini, jadi cukup dipetakan generik.
+    if (err instanceof GeminiCallError) {
+      return NextResponse.json({ error: err.userMessage }, { status: err.status });
+    }
+
     return NextResponse.json(
-      { error: "Gagal menjalankan Integrity Check. Coba lagi." },
+      { error: "Terjadi kesalahan pada server. Coba lagi." },
       { status: 500 }
     );
   }
 }
-
-export type { IntegrityCheckResponse, IntegrityBreakdown };

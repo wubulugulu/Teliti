@@ -1,4 +1,3 @@
-
 import pdf from "pdf-parse/lib/pdf-parse.js";
 import { createCanvas, Canvas, CanvasRenderingContext2D as NodeCanvasContext2D } from "canvas";
 import path from "path";
@@ -202,12 +201,19 @@ export class PdfExtractError extends Error {
  * Ekstrak teks + render halaman yang memuat figure jadi gambar (untuk
  * verifikasi visual via Gemini Vision). Dipakai bareng oleh
  * /api/extract-pdf (standalone) dan /api/integrity-check (orkestrasi).
+ *
+ * `maxPages` opsional, default MAX_CHECK_PAGES — dipakai route.ts untuk
+ * adaptive page limiting berdasarkan ukuran file (file besar = scan lebih
+ * sedikit halaman, biar gak timeout).
  */
-export async function extractPdf(buffer: Buffer): Promise<PdfExtractResult> {
+export async function extractPdf(
+  buffer: Buffer,
+  maxPages: number = MAX_CHECK_PAGES
+): Promise<PdfExtractResult> {
   const pageTexts: PageTextEntry[] = [];
   const data = await pdf(buffer, {
     pagerender: buildPageRenderer(pageTexts),
-    max: MAX_CHECK_PAGES,
+    max: maxPages,
   });
   const layerText = data.text?.trim() ?? "";
 
