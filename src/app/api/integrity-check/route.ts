@@ -199,12 +199,12 @@ export async function POST(req: NextRequest) {
         consistencyResult.status === "fulfilled"
           ? consistencyResult.value
           : {
-              error: "Consistency check gagal",
-              detail: String(consistencyResult.reason),
-            },
+            error: "Consistency check gagal",
+            detail: String(consistencyResult.reason),
+          },
       documentCoverage,
       // batasi payload balik ke client biar ga kena 413 lagi
-      documentText: truncatedText.slice(0, 100_000),
+      documentText: truncatedText,
     });
   } catch (err) {
     console.timeEnd("total-request");
