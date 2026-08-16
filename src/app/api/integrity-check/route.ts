@@ -10,7 +10,6 @@ import { MAX_DOC_CHARS, MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 
 export const maxDuration = 60; // Vercel Hobby plan cap
 
-
 const MAX_EXTRACT_PAGES = 200; // ceiling ekstraksi -- lihat komentar di pdf-extract.ts
 const PDF_EXTRACTION_TIMEOUT_MS = 15_000; // ekstraksi murni teks biasanya <3s, ini jaring pengaman
 
@@ -60,9 +59,44 @@ export async function POST(req: NextRequest) {
   console.time("total-request");
 
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const manualText = formData.get("text") as string | null;
+    // Content-Type request BEDA tergantung jalur pengiriman dari client:
+    //   - Upload PDF (page.tsx, jalur file?.name.endsWith(".pdf")) ->
+    //     FormData -> "multipart/form-data"
+    //   - Paste teks manual ATAU docx/txt (diekstrak ke teks di client
+    //     lewat mammoth sebelum dikirim) -> JSON.stringify -> "application/json"
+    // req.formData() cuma bisa parse "multipart/form-data" atau
+    // "application/x-www-form-urlencoded" -- manggil itu langsung tanpa
+    // cek Content-Type dulu bikin crash TypeError mentah dari Node buat
+    // request JSON. Makanya harus di-branch di sini.
+    const contentType = req.headers.get("content-type") ?? "";
+
+    let file: File | null = null;
+    let manualText: string | null = null;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      file = formData.get("file") as File | null;
+      manualText = formData.get("text") as string | null;
+    } else if (contentType.includes("application/json")) {
+      const body = await req.json().catch(() => null);
+      if (!body || typeof body.text !== "string") {
+        console.timeEnd("total-request");
+        return NextResponse.json(
+          { error: "Body JSON harus berisi field 'text' bertipe string." },
+          { status: 400 }
+        );
+      }
+      manualText = body.text;
+    } else {
+      console.timeEnd("total-request");
+      return NextResponse.json(
+        {
+          error:
+            "Content-Type tidak didukung. Gunakan 'multipart/form-data' untuk upload file atau 'application/json' untuk teks langsung.",
+        },
+        { status: 415 }
+      );
+    }
 
     let documentText: string;
     let pageImages: InlineImage[] = [];
@@ -73,7 +107,7 @@ export async function POST(req: NextRequest) {
       if (file.size > MAX_FILE_SIZE_BYTES) {
         console.timeEnd("total-request");
         return NextResponse.json(
-          { error: "Ukuran file maksimal 4MB." },
+          { error: `Ukuran file maksimal ${(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB.` },
           { status: 413 }
         );
       }
@@ -199,9 +233,9 @@ export async function POST(req: NextRequest) {
         consistencyResult.status === "fulfilled"
           ? consistencyResult.value
           : {
-            error: "Consistency check gagal",
-            detail: String(consistencyResult.reason),
-          },
+              error: "Consistency check gagal",
+              detail: String(consistencyResult.reason),
+            },
       documentCoverage,
       // batasi payload balik ke client biar ga kena 413 lagi
       documentText: truncatedText,
