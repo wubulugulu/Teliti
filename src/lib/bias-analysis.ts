@@ -1,4 +1,5 @@
 import { GEMINI_MODEL, GeminiCallError, generateWithRetry } from "./gemini-client";
+import { MAX_DOC_CHARS } from "./constants";
 import type { BiasItem } from "@/types";
 export interface AnalysisResult {
   score: number;
@@ -71,10 +72,6 @@ Aturan:
 - Jangan return biases kosong untuk paper akademik kecuali benar-benar tidak ada indikasi apapun setelah diperiksa menyeluruh.
 - Silhouette Score di bawah 0.5 yang diklaim sebagai "moderate cohesion" atau "good clustering" adalah Confirmation Bias yang jelas.
 - Selalu kembalikan JSON valid`;
-
-// Gemini free tier: 250.000 token/menit (jauh lebih longgar dari Groq 12.000 TPM),
-// context window 1M token. Tetap dibatasi wajar untuk hindari biaya/latensi berlebihan.
-const MAX_DOC_CHARS = 150000;
 
 function truncateText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;

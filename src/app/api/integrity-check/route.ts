@@ -6,31 +6,24 @@ import { checkConsistency } from "@/lib/consistency-check";
 import { extractPdf, PdfExtractError } from "@/lib/pdf-extract";
 import type { InlineImage } from "@/lib/pdf-extract";
 import { GeminiCallError } from "@/lib/gemini-client";
+import { MAX_DOC_CHARS } from "@/lib/constants";
 
 export const maxDuration = 60; // Vercel Hobby plan cap
 
 const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
 const MAX_EXTRACT_PAGES = 200; // ceiling ekstraksi -- lihat komentar di pdf-extract.ts
 const PDF_EXTRACTION_TIMEOUT_MS = 15_000; // ekstraksi murni teks biasanya <3s, ini jaring pengaman
-const MAX_DOC_CHARS = 150_000; // TODO: naikin bertahap setelah cek log gemini-parallel -- lihat catatan di bawah
 
 // ---------------------------------------------------------------------------
-// CATATAN TUNING (baca sebelum ubah MAX_DOC_CHARS):
-//
-// Dari log produksi (dokumen 60 halaman / 69k karakter, sebelum fix ini):
-// gemini-parallel = 21.8s, total-request = 22.45s. Skripsi 135 halaman
-// diperkirakan ~155k karakter (rasio ~1150 karakter/halaman) --
-// MAX_DOC_CHARS 150.000 sudah nge-cover ~97% dari itu.
-//
-// Response endpoint ini sekarang selalu balikin `documentCoverage`
-// yang ngasih tau PERSIS berapa karakter/halaman yang benar-benar
-// dianalisis vs total dokumen. Sebelum naikin MAX_DOC_CHARS:
+// CATATAN TUNING: lihat src/lib/constants.ts untuk log data timing dan
+// alasan nilai MAX_DOC_CHARS saat ini. Proses tuning:
 //   1. Deploy, jalanin scan dokumen panjang (100+ halaman)
-//   2. Cek Vercel log "gemini-parallel" dan "total-request"
-//   3. Kalau masih ada margin aman ke 60 detik (misal < 45s), naikin
-//      MAX_DOC_CHARS ~20-30% (misal ke 180.000-200.000), deploy lagi,
-//      ulangi cek log
-//   4. Begitu gemini-parallel mendekati ~45-50s, STOP -- itu batas
+//   2. Cek Vercel log "gemini-parallel", "total-request", dan baris
+//      "Document coverage:" (log baru di bawah)
+//   3. Kalau masih ada margin aman ke 60 detik (misal < 48s), naikin
+//      MAX_DOC_CHARS di constants.ts, update TUNING LOG di sana, deploy
+//      lagi, ulangi cek log
+//   4. Begitu gemini-parallel mendekati ~48-50s, STOP -- itu batas
 //      amannya. Dokumentasikan angka final ini di FAQ produk.
 // ---------------------------------------------------------------------------
 
@@ -150,6 +143,12 @@ export async function POST(req: NextRequest) {
     const truncatedText = documentText.slice(0, MAX_DOC_CHARS);
     documentCoverage.analyzedChars = truncatedText.length;
     documentCoverage.truncated = documentText.length > MAX_DOC_CHARS;
+
+    // Log langsung di server, biar keliatan di Vercel log tanpa perlu buka
+    // Network tab -- ini yang bakal nunjukkin persis kenapa hasil analisis
+    // berhenti di bab tertentu (kena cap halaman ekstraksi, atau kena cap
+    // MAX_DOC_CHARS).
+    console.log("Document coverage:", JSON.stringify(documentCoverage));
 
     // --- 4. Jalankan bias + consistency check paralel. ---
     // Retry sudah di-handle di dalam analyzeBias/checkConsistency

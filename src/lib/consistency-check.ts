@@ -1,4 +1,5 @@
 import { GEMINI_MODEL, GeminiCallError, generateWithRetry } from "./gemini-client";
+import { MAX_DOC_CHARS } from "./constants";
 import type { ConsistencyResult } from "@/components/ConsistencyResult";
 import type { InlineImage } from "./pdf-extract";
 
@@ -91,7 +92,6 @@ Sebutkan kalimat/angka SPESIFIK dari dokumen saat menjelaskan inkonsistensi.
 Maksimal 10 temuan, prioritaskan yang paling kritis.
 Selalu kembalikan JSON valid.`;
 
-const MAX_DOC_CHARS = 150000;
 const MAX_IMAGES = 10;
 const IMAGE_NOTE_MARKER = "[CATATAN OTOMATIS:";
 const IMAGE_NOTE_RESERVED_CHARS = 2000;
