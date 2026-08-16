@@ -3,7 +3,7 @@ import { createCanvas, Canvas, CanvasRenderingContext2D as NodeCanvasContext2D }
 import path from "path";
 import { pathToFileURL } from "url";
 
-const MAX_CHECK_PAGES = 130;
+const DEFAULT_MAX_PAGES = 200;
 const MAX_IMAGES_TO_SEND = 10;
 const TARGET_MAX_IMAGE_DIMENSION = 1000;
 
@@ -23,11 +23,12 @@ interface PageTextEntry {
   pageNumber: number;
   text: string;
 }
-
 export interface PdfExtractResult {
   text: string;
   figures: FigureReference[];
   pageImages: InlineImage[];
+  totalPagesInDocument: number; // total halaman PDF asli, dari metadata pdf-parse
+  pagesScanned: number; // jumlah halaman yang benar-benar diekstrak (<= maxPages)
 }
 
 // pdf-parse (v1.1.1) memanggil callback ini sekali per halaman, urut dari
@@ -208,8 +209,8 @@ export class PdfExtractError extends Error {
  */
 export async function extractPdf(
   buffer: Buffer,
-  maxPages: number = MAX_CHECK_PAGES
-): Promise<PdfExtractResult> {
+  maxPages: number = DEFAULT_MAX_PAGES
+): Promise<PdfExtractResult> {  
   const pageTexts: PageTextEntry[] = [];
   const data = await pdf(buffer, {
     pagerender: buildPageRenderer(pageTexts),
@@ -254,5 +255,11 @@ export async function extractPdf(
     finalText += `\n\n[CATATAN OTOMATIS: Dokumen ini mereferensikan ${figures.length} figure (${figureList}). Figure biasanya berupa gambar/chart hasil eksperimen (raster image). ${imageNote}]`;
   }
 
-  return { text: finalText.trim(), figures, pageImages };
+return {
+    text: finalText.trim(),
+    figures,
+    pageImages,
+    totalPagesInDocument: data.numpages ?? pageTexts.length,
+    pagesScanned: pageTexts.length,
+  };
 }

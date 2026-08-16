@@ -10,11 +10,28 @@ import { GeminiCallError } from "@/lib/gemini-client";
 export const maxDuration = 60; // Vercel Hobby plan cap
 
 const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
-const PDF_EXTRACTION_TIMEOUT_MS = 40_000; // sisakan ~20s untuk Gemini call
-const MAX_DOC_CHARS = 150_000;
+const MAX_EXTRACT_PAGES = 200; // ceiling ekstraksi -- lihat komentar di pdf-extract.ts
+const PDF_EXTRACTION_TIMEOUT_MS = 15_000; // ekstraksi murni teks biasanya <3s, ini jaring pengaman
+const MAX_DOC_CHARS = 150_000; // TODO: naikin bertahap setelah cek log gemini-parallel -- lihat catatan di bawah
 
 // ---------------------------------------------------------------------------
-// Helpers
+// CATATAN TUNING (baca sebelum ubah MAX_DOC_CHARS):
+//
+// Dari log produksi (dokumen 60 halaman / 69k karakter, sebelum fix ini):
+// gemini-parallel = 21.8s, total-request = 22.45s. Skripsi 135 halaman
+// diperkirakan ~155k karakter (rasio ~1150 karakter/halaman) --
+// MAX_DOC_CHARS 150.000 sudah nge-cover ~97% dari itu.
+//
+// Response endpoint ini sekarang selalu balikin `documentCoverage`
+// yang ngasih tau PERSIS berapa karakter/halaman yang benar-benar
+// dianalisis vs total dokumen. Sebelum naikin MAX_DOC_CHARS:
+//   1. Deploy, jalanin scan dokumen panjang (100+ halaman)
+//   2. Cek Vercel log "gemini-parallel" dan "total-request"
+//   3. Kalau masih ada margin aman ke 60 detik (misal < 45s), naikin
+//      MAX_DOC_CHARS ~20-30% (misal ke 180.000-200.000), deploy lagi,
+//      ulangi cek log
+//   4. Begitu gemini-parallel mendekati ~45-50s, STOP -- itu batas
+//      amannya. Dokumentasikan angka final ini di FAQ produk.
 // ---------------------------------------------------------------------------
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -26,16 +43,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-/**
- * Kurangi jumlah halaman yang di-scan kalau file besar.
- * Dokumen besar biasanya juga berat per halaman (banyak gambar/vector),
- * jadi scan penuh 60 halaman bisa jauh lebih lambat dari perkiraan.
- */
-function getAdaptiveMaxPages(fileSizeBytes: number): number {
-  const sizeMB = fileSizeBytes / (1024 * 1024);
-  if (sizeMB > 3) return 25;
-  if (sizeMB > 1.5) return 40;
-  return 60;
+interface DocumentCoverage {
+  totalPagesInDocument: number | null;
+  pagesScanned: number | null;
+  totalChars: number;
+  analyzedChars: number;
+  truncated: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +73,7 @@ export async function POST(req: NextRequest) {
 
     let documentText: string;
     let pageImages: InlineImage[] = [];
+    let documentCoverage: DocumentCoverage;
 
     if (file) {
       // --- 1. Validasi ukuran file SEBELUM proses apapun ---
@@ -72,14 +86,13 @@ export async function POST(req: NextRequest) {
       }
 
       const buffer = Buffer.from(await file.arrayBuffer());
-      const maxPages = getAdaptiveMaxPages(file.size);
 
       // --- 2. Ekstraksi PDF dengan timeout guard ---
       console.time("pdf-extract");
       let extracted;
       try {
         extracted = await withTimeout(
-          extractPdf(buffer, maxPages),
+          extractPdf(buffer, MAX_EXTRACT_PAGES),
           PDF_EXTRACTION_TIMEOUT_MS,
           "Ekstraksi PDF"
         );
@@ -108,9 +121,23 @@ export async function POST(req: NextRequest) {
 
       documentText = extracted.text;
       pageImages = extracted.pageImages;
+      documentCoverage = {
+        totalPagesInDocument: extracted.totalPagesInDocument,
+        pagesScanned: extracted.pagesScanned,
+        totalChars: documentText.length,
+        analyzedChars: 0, // diisi setelah truncate di bawah
+        truncated: false,
+      };
     } else if (manualText) {
       documentText = manualText;
       // pageImages tetap [] — input teks manual, gak ada PDF buat di-render
+      documentCoverage = {
+        totalPagesInDocument: null,
+        pagesScanned: null,
+        totalChars: documentText.length,
+        analyzedChars: 0,
+        truncated: false,
+      };
     } else {
       console.timeEnd("total-request");
       return NextResponse.json(
@@ -121,6 +148,8 @@ export async function POST(req: NextRequest) {
 
     // --- 3. Truncate biar aman dari limit token/TPM Gemini ---
     const truncatedText = documentText.slice(0, MAX_DOC_CHARS);
+    documentCoverage.analyzedChars = truncatedText.length;
+    documentCoverage.truncated = documentText.length > MAX_DOC_CHARS;
 
     // --- 4. Jalankan bias + consistency check paralel. ---
     // Retry sudah di-handle di dalam analyzeBias/checkConsistency
@@ -174,6 +203,7 @@ export async function POST(req: NextRequest) {
               error: "Consistency check gagal",
               detail: String(consistencyResult.reason),
             },
+      documentCoverage,
       // batasi payload balik ke client biar ga kena 413 lagi
       documentText: truncatedText.slice(0, 100_000),
     });
