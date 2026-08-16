@@ -8,7 +8,7 @@ import ResultPanel from "@/components/ResultPanel";
 import DocumentViewer from "@/components/DocumentViewer";
 import { saveScan, loadScans } from "@/lib/supabase/history";
 import { createClient } from "@/lib/supabase/client";
-import { MAX_FILE_SIZE_BYTES } from "@/lib/constants";
+import { MAX_DOC_CHARS, MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 
 export default function Home() {
   const router = useRouter();
@@ -111,12 +111,15 @@ export default function Home() {
   );
 
   const processFile = async (f: File) => {
-    // Cek ukuran SEBELUM baca file sama sekali -- gagal cepat, gak nunggu
-    // mammoth proses docx gede atau upload PDF gede dulu baru ditolak
-    // server. Berlaku buat SEMUA tipe file (pdf, docx, doc, txt).
-    if (f.size > MAX_FILE_SIZE_BYTES) {
+    const isPdfFile = f.name.endsWith(".pdf");
+
+    // Cek raw file size HANYA buat PDF -- itu dikirim mentah ke server
+    // (FormData), jadi ukuran file = ukuran payload beneran. Docx/txt
+    // diekstrak jadi teks DI CLIENT dulu (lihat di bawah), raw file
+    // size-nya gak nyambung sama ukuran payload yang beneran dikirim.
+    if (isPdfFile && f.size > MAX_FILE_SIZE_BYTES) {
       setError(
-        `Ukuran file maksimal ${(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB. File lo ${(f.size / (1024 * 1024)).toFixed(1)}MB.`
+        `Ukuran file PDF maksimal ${(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB. File lo ${(f.size / (1024 * 1024)).toFixed(1)}MB.`
       );
       return;
     }
@@ -130,9 +133,9 @@ export default function Home() {
         const mammoth = await import("mammoth");
         const arrayBuffer = await f.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
-        setText(result.value);
+        applyExtractedText(result.value);
       } else if (f.name.endsWith(".txt")) {
-        setText(await f.text());
+        applyExtractedText(await f.text());
       }
     } catch {
       setError("Gagal membaca file.");
@@ -142,6 +145,29 @@ export default function Home() {
       if (fileRef.current) fileRef.current.value = "";
     }
   };
+
+  /**
+   * Terapkan teks hasil ekstraksi docx/txt ke state, dengan truncate kalau
+   * kepanjangan. Ini bukan soal ukuran FILE mentah (itu udah gak relevan
+   * buat docx/txt, lihat komentar MAX_FILE_SIZE_BYTES di constants.ts),
+   * tapi soal panjang TEKS yang bakal dikirim ke server sebagai JSON body.
+   * Server toh bakal truncate ke MAX_DOC_CHARS juga buat analisis Gemini
+   * -- truncate di sini nyegah kirim payload gede percuma dan nyegah kena
+   * limit ukuran body Vercel buat dokumen yang beneran ekstrem panjangnya.
+   */
+  const applyExtractedText = (extracted: string) => {
+    if (extracted.length > MAX_DOC_CHARS) {
+      setText(extracted.slice(0, MAX_DOC_CHARS));
+      setError(
+        `Dokumen ini punya ${extracted.length.toLocaleString("id")} karakter, ` +
+        `dipotong ke ${MAX_DOC_CHARS.toLocaleString("id")} karakter pertama untuk dianalisis ` +
+        `(dokumen sangat panjang, hanya bagian awal yang akan dicek).`
+      );
+    } else {
+      setText(extracted);
+    }
+  };
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -265,7 +291,7 @@ export default function Home() {
               Drag & drop atau <span className="text-teal-600">pilih file</span>
             </p>
             <p className="text-xs text-[#6d7a77]">
-              PDF, DOCX, TXT · Maks. {(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB
+              PDF (maks. {(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB) · DOCX, TXT (tanpa batas ukuran file, teks panjang otomatis dipotong)
             </p>
           </div>
         )}
