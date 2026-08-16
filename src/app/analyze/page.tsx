@@ -95,8 +95,9 @@ export default function Home() {
       </button>
 
       <div
-        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
-          }`}
+        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${
+          userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        }`}
       >
         <button
           onClick={handleLogout}
@@ -198,8 +199,121 @@ export default function Home() {
   const isPDF = file?.name.endsWith(".pdf");
   const canScan = !loading && (!!file || wordCount >= 5);
 
-  // ── INPUT STAGE ──────────────────────────────────────────────────
-  if (stage === "input") {
+  // Markup form upload/paste-text -- dipakai di DUA tempat: full landing
+  // (user baru, belum punya history sama sekali) dan inline di dalam app
+  // shell (user klik "New Analysis" saat sudah punya history). Ekstrak
+  // jadi fungsi lokal supaya gak duplikat, bukan komponen terpisah biar
+  // gak perlu prop-drilling banyak state.
+  const renderUploadForm = () => (
+    <>
+      <div
+        onDrop={handleDrop}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onClick={() => !file && fileRef.current?.click()}
+        className={`rounded-2xl border-2 border-dashed transition-all mb-4 p-7 ${dragging ? "border-teal-500 bg-teal-50"
+          : file ? "border-teal-400 bg-teal-50/50"
+            : "border-[#bcc9c6] bg-white/70 hover:border-teal-300 hover:bg-white/90 cursor-pointer"
+          }`}
+      >
+        {fileLoading ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <div className="w-8 h-8 rounded-full border-2 border-teal-200 border-t-teal-600 animate-spin" />
+            <p className="text-sm text-[#6d7a77]">Membaca file...</p>
+          </div>
+        ) : file ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-teal-100">
+                {isPDF ? "📕" : "📄"}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0b1c30]">{file.name}</p>
+                <p className="text-xs mt-0.5 text-[#6d7a77]">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setFile(null); setText(""); }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+            >
+              Hapus
+            </button>
+          </div>
+        ) : dragging ? (
+          <div className="flex flex-col items-center gap-2 py-4">
+            <p className="text-sm font-semibold text-teal-600">Lepas file di sini</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-1">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
+                <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-[#0b1c30]">
+              Drag & drop atau <span className="text-teal-600">pilih file</span>
+            </p>
+            <p className="text-xs text-[#6d7a77]">PDF, DOCX, TXT · Maks. 10MB</p>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} className="hidden" />
+      </div>
+
+      {!isPDF && (
+        <>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px bg-[#bcc9c6]" />
+            <span className="text-xs text-[#6d7a77]">atau ketik langsung</span>
+            <div className="flex-1 h-px bg-[#bcc9c6]" />
+          </div>
+          <div className="rounded-2xl border border-[#bcc9c6] bg-white/80 overflow-hidden mb-4">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Paste teks di sini..."
+              className="w-full px-5 pt-5 pb-3 resize-none outline-none text-sm leading-relaxed bg-transparent text-[#0b1c30] placeholder:text-[#6d7a77]"
+              style={{ minHeight: "180px", fontFamily: "inherit" }}
+              rows={7}
+            />
+            <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5eeff]">
+              <span className="text-xs text-[#6d7a77]">
+                {wordCount > 0 ? `${wordCount} kata` : "Min. 5 kata"}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {error && (
+        <div className="rounded-xl px-4 py-3 mb-4 text-sm bg-red-50 text-red-600 border border-red-100">
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={scan}
+        disabled={!canScan}
+        className={`w-full py-3.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${canScan
+          ? "bg-teal-600 text-white hover:bg-teal-700 hover:shadow-[0_4px_20px_rgba(13,148,136,0.3)]"
+          : "bg-[#e5eeff] text-[#6d7a77] cursor-not-allowed"
+          }`}
+      >
+        {loading ? (
+          <>
+            <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            Menganalisis...
+          </>
+        ) : "Scan Dokumen"}
+      </button>
+    </>
+  );
+
+  // ── FULL LANDING (user baru, belum pernah scan sama sekali) ─────────
+  // Ini SATU-SATUNYA kondisi yang masih full-page tanpa sidebar. Begitu
+  // history.length > 0, "New Analysis" gak akan pernah masuk ke sini lagi
+  // -- lihat app shell di bawah.
+  if (stage === "input" && history.length === 0) {
     return (
       <div className="min-h-screen flex flex-col bg-[#f0fdfa]">
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
@@ -213,7 +327,6 @@ export default function Home() {
             className="flex items-center cursor-pointer"
           >
             <img src="/logo.svg" alt="Teliti" className="h-8" />
-
           </div>
           <ProfileMenu />
         </header>
@@ -230,106 +343,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div
-              onDrop={handleDrop}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onClick={() => !file && fileRef.current?.click()}
-              className={`rounded-2xl border-2 border-dashed transition-all mb-4 p-7 ${dragging ? "border-teal-500 bg-teal-50"
-                : file ? "border-teal-400 bg-teal-50/50"
-                  : "border-[#bcc9c6] bg-white/70 hover:border-teal-300 hover:bg-white/90 cursor-pointer"
-                }`}
-            >
-              {fileLoading ? (
-                <div className="flex flex-col items-center gap-3 py-4">
-                  <div className="w-8 h-8 rounded-full border-2 border-teal-200 border-t-teal-600 animate-spin" />
-                  <p className="text-sm text-[#6d7a77]">Membaca file...</p>
-                </div>
-              ) : file ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-teal-100">
-                      {isPDF ? "📕" : "📄"}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-[#0b1c30]">{file.name}</p>
-                      <p className="text-xs mt-0.5 text-[#6d7a77]">{(file.size / 1024).toFixed(1)} KB</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setFile(null); setText(""); }}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
-                  >
-                    Hapus
-                  </button>
-                </div>
-              ) : dragging ? (
-                <div className="flex flex-col items-center gap-2 py-4">
-                  <p className="text-sm font-semibold text-teal-600">Lepas file di sini</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-4 text-center">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-1">
-                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
-                      <path d="M12 4v12m0-12L8 8m4-4l4 4" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="#0d9488" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-medium text-[#0b1c30]">
-                    Drag & drop atau <span className="text-teal-600">pilih file</span>
-                  </p>
-                  <p className="text-xs text-[#6d7a77]">PDF, DOCX, TXT · Maks. 10MB</p>
-                </div>
-              )}
-              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} className="hidden" />
-            </div>
-
-            {!isPDF && (
-              <>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px bg-[#bcc9c6]" />
-                  <span className="text-xs text-[#6d7a77]">atau ketik langsung</span>
-                  <div className="flex-1 h-px bg-[#bcc9c6]" />
-                </div>
-                <div className="rounded-2xl border border-[#bcc9c6] bg-white/80 overflow-hidden mb-4">
-                  <textarea
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Paste teks di sini..."
-                    className="w-full px-5 pt-5 pb-3 resize-none outline-none text-sm leading-relaxed bg-transparent text-[#0b1c30] placeholder:text-[#6d7a77]"
-                    style={{ minHeight: "180px", fontFamily: "inherit" }}
-                    rows={7}
-                  />
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-[#e5eeff]">
-                    <span className="text-xs text-[#6d7a77]">
-                      {wordCount > 0 ? `${wordCount} kata` : "Min. 5 kata"}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {error && (
-              <div className="rounded-xl px-4 py-3 mb-4 text-sm bg-red-50 text-red-600 border border-red-100">
-                {error}
-              </div>
-            )}
-
-            <button
-              onClick={scan}
-              disabled={!canScan}
-              className={`w-full py-3.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${canScan
-                ? "bg-teal-600 text-white hover:bg-teal-700 hover:shadow-[0_4px_20px_rgba(13,148,136,0.3)]"
-                : "bg-[#e5eeff] text-[#6d7a77] cursor-not-allowed"
-                }`}
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Menganalisis...
-                </>
-              ) : "Scan Dokumen"}
-            </button>
+            {renderUploadForm()}
 
             <div className="mt-8 grid grid-cols-2 gap-2">
               {[
@@ -350,7 +364,11 @@ export default function Home() {
     );
   }
 
-  // ── RESULT STAGE ──────────────────────────────────────────────────
+  // ── APP SHELL (user sudah punya history) ─────────────────────────────
+  // Sidebar & header SELALU render di sini, baik lagi liat hasil
+  // (stage === "result") maupun lagi mulai analisis baru
+  // (stage === "input" setelah klik "New Analysis"). Cuma konten tengah
+  // yang ganti.
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#f0fdfa]">
       <header className="flex items-center justify-between px-5 py-3 border-b border-[#e5eeff] bg-white/80 backdrop-blur-md flex-shrink-0">
@@ -399,13 +417,13 @@ export default function Home() {
               {history.map((record) => (
                 <button
                   key={record.id}
-                  onClick={() => { setActiveScan(record); setActiveHighlight(null); }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${activeScan?.id === record.id
+                  onClick={() => { setActiveScan(record); setActiveHighlight(null); setStage("result"); }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${activeScan?.id === record.id && stage === "result"
                     ? "bg-teal-50 border border-teal-200"
                     : "hover:bg-[#f0fdfa]"
                     }`}
                 >
-                  <p className={`text-xs font-medium truncate mb-0.5 ${activeScan?.id === record.id ? "text-teal-700" : "text-[#0b1c30]"}`}>
+                  <p className={`text-xs font-medium truncate mb-0.5 ${activeScan?.id === record.id && stage === "result" ? "text-teal-700" : "text-[#0b1c30]"}`}>
                     {record.fileName}
                   </p>
                   <div className="flex items-center gap-2">
@@ -422,32 +440,46 @@ export default function Home() {
                 </button>
               ))}
             </div>
-
-
           </aside>
         )}
 
-        <div className="flex-1 overflow-hidden flex flex-col bg-white/50">
-          {activeScan && (
-            <DocumentViewer
-              text={activeScan.documentText}
-              biases={activeScan.biasResult?.biases ?? []}
-              issues={activeScan.consistencyResult?.issues ?? []}
-              activeHighlight={activeHighlight}
-              onHighlightClick={setActiveHighlight}
-            />
-          )}
-        </div>
+        {stage === "result" && activeScan ? (
+          <>
+            <div className="flex-1 overflow-hidden flex flex-col bg-white/50">
+              <DocumentViewer
+                text={activeScan.documentText}
+                biases={activeScan.biasResult?.biases ?? []}
+                issues={activeScan.consistencyResult?.issues ?? []}
+                activeHighlight={activeHighlight}
+                onHighlightClick={setActiveHighlight}
+              />
+            </div>
 
-        <div className="w-96 flex-shrink-0 border-l border-[#e5eeff] overflow-y-auto bg-white/70">
-          {activeScan && (
-            <ResultPanel
-              scan={activeScan}
-              activeHighlight={activeHighlight}
-              onHighlightSelect={setActiveHighlight}
-            />
-          )}
-        </div>
+            <div className="w-96 flex-shrink-0 border-l border-[#e5eeff] overflow-y-auto bg-white/70">
+              <ResultPanel
+                scan={activeScan}
+                activeHighlight={activeHighlight}
+                onHighlightSelect={setActiveHighlight}
+              />
+            </div>
+          </>
+        ) : (
+          // stage === "input" tapi history.length > 0 -- "New Analysis"
+          // diklik dari dalam app. Sidebar tetap ada, panel tengah ganti
+          // jadi form upload/paste-text, panel kanan (ResultPanel)
+          // disembunyikan karena belum ada hasil buat ditampilin.
+          <div className="flex-1 overflow-y-auto bg-white/50 flex justify-center px-6 py-10">
+            <div className="w-full max-w-xl">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-[#0b1c30] mb-1">Analisis Baru</h2>
+                <p className="text-sm text-[#6d7a77]">
+                  Upload dokumen atau paste teks buat dicek bias dan konsistensinya.
+                </p>
+              </div>
+              {renderUploadForm()}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
