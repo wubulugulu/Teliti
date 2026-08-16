@@ -6,11 +6,11 @@ import { checkConsistency } from "@/lib/consistency-check";
 import { extractPdf, PdfExtractError } from "@/lib/pdf-extract";
 import type { InlineImage } from "@/lib/pdf-extract";
 import { GeminiCallError } from "@/lib/gemini-client";
-import { MAX_DOC_CHARS } from "@/lib/constants";
+import { MAX_DOC_CHARS, MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 
 export const maxDuration = 60; // Vercel Hobby plan cap
 
-const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+
 const MAX_EXTRACT_PAGES = 200; // ceiling ekstraksi -- lihat komentar di pdf-extract.ts
 const PDF_EXTRACTION_TIMEOUT_MS = 15_000; // ekstraksi murni teks biasanya <3s, ini jaring pengaman
 

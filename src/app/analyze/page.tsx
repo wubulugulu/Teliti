@@ -8,6 +8,7 @@ import ResultPanel from "@/components/ResultPanel";
 import DocumentViewer from "@/components/DocumentViewer";
 import { saveScan, loadScans } from "@/lib/supabase/history";
 import { createClient } from "@/lib/supabase/client";
+import { MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 
 export default function Home() {
   const router = useRouter();
@@ -95,9 +96,8 @@ export default function Home() {
       </button>
 
       <div
-        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${
-          userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
-        }`}
+        className={`absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-[#e5eeff] overflow-hidden origin-top-right transition-all duration-200 ${userMenuOpen ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+          }`}
       >
         <button
           onClick={handleLogout}
@@ -111,9 +111,20 @@ export default function Home() {
   );
 
   const processFile = async (f: File) => {
+    // Cek ukuran SEBELUM baca file sama sekali -- gagal cepat, gak nunggu
+    // mammoth proses docx gede atau upload PDF gede dulu baru ditolak
+    // server. Berlaku buat SEMUA tipe file (pdf, docx, doc, txt).
+    if (f.size > MAX_FILE_SIZE_BYTES) {
+      setError(
+        `Ukuran file maksimal ${(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB. File lo ${(f.size / (1024 * 1024)).toFixed(1)}MB.`
+      );
+      return;
+    }
+
     setFileLoading(true);
     setFile(f);
     setText("");
+    setError("");
     try {
       if (f.name.endsWith(".docx") || f.name.endsWith(".doc")) {
         const mammoth = await import("mammoth");
@@ -131,7 +142,6 @@ export default function Home() {
       if (fileRef.current) fileRef.current.value = "";
     }
   };
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -254,7 +264,9 @@ export default function Home() {
             <p className="text-sm font-medium text-[#0b1c30]">
               Drag & drop atau <span className="text-teal-600">pilih file</span>
             </p>
-            <p className="text-xs text-[#6d7a77]">PDF, DOCX, TXT · Maks. 10MB</p>
+            <p className="text-xs text-[#6d7a77]">
+              PDF, DOCX, TXT · Maks. {(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1)}MB
+            </p>
           </div>
         )}
         <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} className="hidden" />

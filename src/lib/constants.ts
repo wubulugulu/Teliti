@@ -17,3 +17,13 @@
  *     Update log ini tiap kali dites ulang dengan data produksi baru.
  */
 export const MAX_DOC_CHARS = 220_000;
+
+/**
+ * Batas ukuran file upload (PDF/DOCX/DOC/TXT), berlaku SEBELUM proses
+ * apapun -- dicek di client (page.tsx, sebelum baca file sama sekali,
+ * termasuk sebelum mammoth ekstraksi docx) dan di server (route.ts,
+ * defense-in-depth kalau ada yang panggil API langsung tanpa lewat UI).
+ *
+ * Satu-satunya sumber angka ini -- JANGAN hardcode ulang di tempat lain.
+ */
+export const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024; // 4.5MB
